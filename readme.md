@@ -1,4 +1,7 @@
-ron@pi4:~ $ sudo cat /etc/systemd/system/youless-reader.service
+# install as systemd service
+
+/etc/systemd/system/youless-reader.service
+```
 [Unit]
 Description=Youless reader service
 
@@ -9,4 +12,11 @@ WorkingDirectory=/opt/youless/src
 
 [Install]
 WantedBy=multi-user.target
+```
 
+```
+sudo systemctl daemon-reload
+sudo systemctl enable youless-reader.service
+sudo systemctl start youless-reader.service
+sudo systemctl status youless-reader.service
+```
