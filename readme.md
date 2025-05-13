@@ -1,4 +1,14 @@
-# install as systemd service
+# Project to read time series data from a youless, and visualize with garafana
+## Goals
+* run a data gathering daemon that stores in SQLite
+* do remote development over ssh to pi
+* setup Grafana in docker, and attach to SQLite datasource
+* have a dashboard app visible remotely on phone
+
+## Remote development
+
+
+## install youless reader as systemd service
 
 /etc/systemd/system/youless-reader.service
 ```
