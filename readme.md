@@ -35,5 +35,6 @@ ron@pi4:/opt/youless/src $ sqlite3  data.sqlite
 
 sqlite> .schema data
 sqlite> select datetime(tm, 'unixepoch') as dt from data;
+sqlite> select datetime(tm, 'unixepoch') as dt, net, pwr from data;
 sqlite> .exit
 

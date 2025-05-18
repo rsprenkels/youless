@@ -1,22 +1,23 @@
-import os
-from datetime import datetime
-import sqlite3
-from time import strftime
+from pathlib import Path
 import logging as log
+import os
+import sqlite3
 
 log.basicConfig(format="%(asctime)s - %(message)s", level=log.INFO)
 
-db_fn_default = "data.sqlite"
-
+db_fn_default = "../data/data.sqlite"
 
 class Dao:
     def __init__(self, db_file: str = db_fn_default):
-        if os.path.isfile(db_file):
-            self.conn = sqlite3.connect(db_file, check_same_thread=False)
-            print(f"database connected {db_file}")
+        data_file = Path(__file__).parent.parent / 'data' / db_file
+        data_file.parent.mkdir(exist_ok=True)
+        self.db_file = data_file
+        if os.path.isfile(self.db_file):
+            # self.conn = sqlite3.connect(db_file, check_same_thread=False)
+            print(f"database exists {self.db_file}")
         else:
-            self.conn = sqlite3.connect(db_file, check_same_thread=False)
-            self.conn.execute(
+            conn = sqlite3.connect(self.db_file, check_same_thread=False)
+            conn.execute(
                 """
                 create table data (
                     tm int,
@@ -35,7 +36,8 @@ class Dao:
                     wts int);
             """
             )
-            print(f"database created {db_file}")
+            print(f"database created {self.db_file} and closed it")
+            conn.close()
 
     def add(self, datagram: dict):
         tablename = "data"
@@ -51,8 +53,23 @@ class Dao:
             + question_marks
             + ")"
         )
-        self.conn.execute(statement, values)
-        self.conn.commit()
+
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("BEGIN IMMEDIATE")
+            conn.execute(statement, values)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
+        # self.conn.execute(statement, values)
+        # self.conn.commit()
 
 
 def remove_if_exists(filename):
@@ -62,13 +79,11 @@ def remove_if_exists(filename):
 
 # https://gist.github.com/pdc/1188720 for mocking time
 
-
-def hidden_test_1():
+def test_1():
     test_db = "test1_dbfile.sqlite"
     remove_if_exists(test_db)
     d = Dao(test_db)
     d.add({"test1key": "test1_value"})
-
 
 # chatGPT suggested to do it this way:
 

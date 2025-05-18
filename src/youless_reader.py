@@ -1,12 +1,14 @@
 #!/usr/bin/python
 import json
 import time
+
 import requests
+
 import youless_dao
 
 
 def youless_reader():
-    dao = youless_dao.Dao()
+    dao = youless_dao.Dao('youless.data')
     prev_datagram = None
     while True:
         r = requests.get("http://192.168.2.12/e")
