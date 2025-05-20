@@ -33,8 +33,29 @@ sudo systemctl status youless-reader.service
 
 ron@pi4:/opt/youless/src $ sqlite3  data.sqlite
 
+```
 sqlite> .schema data
 sqlite> select datetime(tm, 'unixepoch') as dt from data;
 sqlite> select datetime(tm, 'unixepoch') as dt, net, pwr from data;
 sqlite> .exit
+```
 
+```angular2html
+ron@patricia:~/IdeaProjects/youless/data $ sqlite3 youless.data ".schema data"
+CREATE TABLE data (
+                    tm int,
+                    net numeric,
+                    pwr int,
+                    ts0 int,
+                    cs0 numeric,
+                    ps0 int,
+                    p1 numeric,
+                    p2 numeric,
+                    n1 numeric,
+                    n2 numeric,
+                    gas numeric,
+                    gts int,
+                    wtr numeric,
+                    wts int);
+
+```
