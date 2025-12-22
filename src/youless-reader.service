@@ -1,0 +1,39 @@
+# /etc/systemd/system/youless-reader.service
+[Unit]
+Description=Youless Reader (runs youless_reader.py inside Python venv)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# --- Adjust these paths and user/group ---
+User=youless          # create or choose an existing service user
+Group=youless
+WorkingDirectory=/opt/youless
+# -----------------------------------------
+
+# Environment (optional but useful)
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+ExecStart=/opt/youless/.venv/bin/python /opt/youless/youless_reader.py
+
+# Restart policy
+Restart=always
+RestartSec=3
+# Stop gracefully
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+# Journald logs
+StandardOutput=journal
+StandardError=journal
+
+# Hardening (safe defaults; relax if your script needs more)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/youless
+
+[Install]
+WantedBy=multi-user.target
