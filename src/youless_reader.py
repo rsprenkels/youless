@@ -4,11 +4,11 @@ import time
 
 import requests
 
-import youless_dao
+import youless_dao_postgres
 
 
 def youless_reader():
-    dao = youless_dao.Dao('youless.data')
+    dao = youless_dao_postgres.Dao()
     prev_datagram = None
     while True:
         r = requests.get("http://192.168.2.12/e")

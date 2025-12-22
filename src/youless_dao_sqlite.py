@@ -7,9 +7,10 @@ log.basicConfig(format="%(asctime)s - %(message)s", level=log.INFO)
 
 db_fn_default = "../data/data.sqlite"
 
+
 class Dao:
     def __init__(self, db_file: str = db_fn_default):
-        data_file = Path(__file__).parent.parent / 'data' / db_file
+        data_file = Path(__file__).parent.parent / "data" / db_file
         data_file.parent.mkdir(exist_ok=True)
         self.db_file = data_file
         if os.path.isfile(self.db_file):
@@ -79,25 +80,9 @@ def remove_if_exists(filename):
 
 # https://gist.github.com/pdc/1188720 for mocking time
 
+
 def test_1():
     test_db = "test1_dbfile.sqlite"
     remove_if_exists(test_db)
     d = Dao(test_db)
     d.add({"test1key": "test1_value"})
-
-# chatGPT suggested to do it this way:
-
-# import sqlite3
-# conn = sqlite3.connect("mydb.sqlite")
-# cursor = conn.cursor()
-#
-# try:
-#     cursor.execute("BEGIN IMMEDIATE")
-#     cursor.execute("INSERT INTO my_table (col1, col2) VALUES (?, ?)", (val1, val2))
-#     conn.commit()
-# except Exception as e:
-#     conn.rollback()
-#     raise
-# finally:
-#     cursor.close()
-#     conn.close()
