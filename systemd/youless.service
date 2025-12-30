@@ -1,4 +1,4 @@
-# /etc/systemd/system/youless-reader.service
+# /etc/systemd/system/youless.service
 [Unit]
 Description=Youless Reader (runs youless_reader.py inside Python venv)
 After=network-online.target
@@ -6,9 +6,10 @@ Wants=network-online.target
 
 [Service]
 # --- Adjust these paths and user/group ---
-User=youless          # create or choose an existing service user
+User=youless
 Group=youless
-WorkingDirectory=/opt/youless
+# keep WorkingDirectory the same value as APP_DIR in Jenkinsfile
+WorkingDirectory=/opt/youless_test
 # see https://chatgpt.com/s/t_694b156f37dc8191a5740da448e44641 for dealing with env vars
 # -----------------------------------------
 
@@ -17,7 +18,8 @@ Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
 
 # the actual executable. It starts the python env, and starts the script
-ExecStart=/opt/youless/.venv/bin/python /opt/youless/youless_reader.py
+# DEPENDS ON WorkingDirectory
+ExecStart=/opt/youless_test/venv313/bin/python /opt/youless_test/src/youless_reader.py
 
 # Restart policy
 Restart=always
