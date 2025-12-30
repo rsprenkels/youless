@@ -9,12 +9,14 @@ Wants=network-online.target
 User=youless          # create or choose an existing service user
 Group=youless
 WorkingDirectory=/opt/youless
+# see https://chatgpt.com/s/t_694b156f37dc8191a5740da448e44641 for dealing with env vars
 # -----------------------------------------
 
 # Environment (optional but useful)
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
 
+# the actual executable. It starts the python env, and starts the script
 ExecStart=/opt/youless/.venv/bin/python /opt/youless/youless_reader.py
 
 # Restart policy

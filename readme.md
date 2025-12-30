@@ -7,8 +7,11 @@
 
 ## Remote development
 
-
 ## install youless reader as systemd service
+
+The youless daemon runs as a dedicated user called youless.
+https://chatgpt.com/s/t_694b1303856c8191adbfb7783aa5a135
+
 
 /etc/systemd/system/youless-reader.service
 ```

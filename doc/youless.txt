@@ -1,0 +1,3 @@
+# create a file in one go, no race attack surface:
+sudo install -D -m 600 -o root -g root /dev/null /etc/youless/youless.env
+
