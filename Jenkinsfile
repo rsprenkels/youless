@@ -32,8 +32,8 @@ pipeline {
       agent { label "${params.DEPLOY_TARGET}" }
       steps {
         sh '''#!/bin/bash
-          echo "deploying to target: ${params.DEPLOY_TARGET}"
           set -euo pipefail
+          echo "deploying to target: ${DEPLOY_TARGET}"
 
           STAGING="${WORKSPACE}"
 
