@@ -46,7 +46,7 @@ pipeline {
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
-
+          whoami
           sudo systemctl is-active --quiet youless.service
           sudo systemctl --no-pager --full status youless.service | sed -n '1,20p'
         '''
