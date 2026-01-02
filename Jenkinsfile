@@ -7,7 +7,7 @@ pipeline {
 
   environment {
     APP_NAME     = 'youless'
-    APP_DIR      = '/opt/youless'
+    APP_DIR      = '/opt/youless_test'
     UNIT_NAME    = 'youless.service'
     DEPLOY_SCRIPT= '/usr/local/sbin/deploy-youless.sh'
   }
@@ -21,17 +21,10 @@ pipeline {
 
     stage('Deploy') {
       steps {
-        sh '''
+        sh '''#!/bin/bash
           set -euo pipefail
 
-          # Example: copy the workspace contents to a staging dir (optional)
-          # If you deploy directly from workspace, you can skip staging.
-          STAGING="$(mktemp -d)"
-          trap 'rm -rf "$STAGING"' EXIT
-
-          rsync -a --delete \
-            --exclude ".git/" \
-            ./ "$STAGING/"
+          STAGING="${WORKSPACE}"
 
           # Call the privileged deploy helper (single controlled entry point)
           sudo -n "${DEPLOY_SCRIPT}" \
@@ -47,7 +40,7 @@ pipeline {
 
     stage('Smoke check') {
       steps {
-        sh '''
+        sh '''#!/bin/bash
           set -euo pipefail
           systemctl is-active --quiet youless.service
           systemctl --no-pager --full status youless.service | sed -n '1,20p'
