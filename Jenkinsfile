@@ -33,7 +33,7 @@ pipeline {
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
-          echo "deploying to target: ${DEPLOY_TARGET}"
+          echo "deploying to target: ${DEPLOY_TARGET} using deploy helper script ${DEPLOY_SCRIPT}"
 
           STAGING="${WORKSPACE}"
 
