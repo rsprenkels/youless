@@ -1,5 +1,13 @@
 pipeline {
-  agent { label 'patricia' }
+  agent any
+
+   parameters {
+      choice(
+        name: 'DEPLOY_TARGET',
+        choices: ['pi', 'patricia'],
+        description: 'Where to deploy (maps to a Jenkins node label)'
+      )
+    }
 
   options {
     timestamps()
@@ -14,12 +22,14 @@ pipeline {
 
   stages {
     stage('Checkout') {
+      agent { label "${params.DEPLOY_TARGET}" }
       steps {
         checkout scm
       }
     }
 
     stage('Deploy') {
+      agent { label "${params.DEPLOY_TARGET}" }
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
@@ -43,6 +53,7 @@ pipeline {
     }
 
     stage('Smoke check') {
+      agent { label "${params.DEPLOY_TARGET}" }
       steps {
         sh '''#!/bin/bash
           set -euo pipefail

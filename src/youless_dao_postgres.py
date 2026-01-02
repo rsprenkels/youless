@@ -99,6 +99,6 @@ class Dao:
 
 def test_1():
     # Set DATABASE_URL environment variable before running:
-    # export DATABASE_URL="postgresql://postgres:your_password@localhost:5432/youless_test"
+    # export PG_DSN="host=patricia port=5432 dbname=timescale user=tsdb password=<<secret>>"
     d = Dao()
     d.add({"tm": 1234567890, "net": 123.45, "pwr": 100})
