@@ -49,6 +49,8 @@ if [[ "$UNIT_NAME" != "youless.service" ]]; then
   exit 3
 fi
 
+echo "deploy_youless.sh is starting."
+
 # Ensure directories exist
 install -d -m 0755 "$APP_DIR"
 install -d -m 0755 "/etc/systemd/system"
@@ -58,10 +60,11 @@ find "${APP_DIR}" -mindepth 1 -type f -delete
 find "${APP_DIR}" -mindepth 1 -type d -empty -delete
 
 # Copy specific application files individually
-install -m 0755 -D "${SRC_DIR}/youless_reader.py" "${APP_DIR}/youless_reader.py"
+install -m 0755 -D "${SRC_DIR}/youless_reader.py" "${APP_DIR}/src/youless_reader.py"
 if [[ -f "${SRC_DIR}/requirements.txt" ]]; then
-  install -m 0644 -D "${SRC_DIR}/requirements.txt" "${APP_DIR}/requirements.txt"
+  install -m 0644 -D "${SRC_DIR}/requirements.txt" "${APP_DIR}/src/requirements.txt"
 fi
+
 # Copy any additional Python modules from src/ if they exist
 if [[ -d "${SRC_DIR}/src" ]]; then
   find "${SRC_DIR}/src" -type f -name "*.py" ! -name "*.pyc" -exec bash -c '
@@ -78,8 +81,10 @@ install -m 0644 "$UNIT_SRC" "/etc/systemd/system/${UNIT_NAME}"
 # Here we update the venv as root because this script is root-run; that’s acceptable if APP_DIR is root-owned.
 if [[ -n "${VENV_DIR}" && -n "${REQ_FILE}" && -f "${REQ_FILE}" ]]; then
   if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
+    echo "creating a python3 virtual environment in ${VENV_DIR}"
     python3 -m venv "${VENV_DIR}"
   fi
+  echo "From python in ${VENV_DIR} installing pip and the modules from ${REQ_FILE}"
   "${VENV_DIR}/bin/python" -m pip install -U pip wheel
   "${VENV_DIR}/bin/python" -m pip install -r "${REQ_FILE}"
 fi
