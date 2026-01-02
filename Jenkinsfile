@@ -42,6 +42,10 @@ pipeline {
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
+
+          # Wait briefly for service to fully start
+          sleep 2
+
           systemctl is-active --quiet youless.service
           systemctl --no-pager --full status youless.service | sed -n '1,20p'
         '''
