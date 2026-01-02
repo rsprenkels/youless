@@ -7,7 +7,7 @@ log.basicConfig(format="%(asctime)s - %(message)s", level=log.INFO)
 
 
 class Dao:
-    def __init__(self):
+    def __init__(self, table_name: str = "data"):
         # Get DATABASE_URL from environment variable
         # Expected format: postgresql://user:password@host:port/database
         database_url = os.getenv("PG_DSN")
@@ -15,6 +15,7 @@ class Dao:
             raise ValueError("PG_DSN environment variable is not set")
 
         self.connection_params = database_url
+        self.table_name = table_name
 
         # Test connection and create table if needed
         try:
@@ -23,8 +24,8 @@ class Dao:
 
             # Create table if it doesn't exist
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS data (
+                f"""
+                CREATE TABLE IF NOT EXISTS {self.table_name} (
                     tm TIMESTAMPTZ,
                     net NUMERIC,
                     pwr INTEGER,
@@ -44,7 +45,9 @@ class Dao:
             )
 
             conn.commit()
-            print(f"Connected to PostgreSQL database")
+            print(
+                f"Connected to PostgreSQL database using table name {self.table_name}"
+            )
 
         except Exception as e:
             print(f"Error connecting to database: {e}")
@@ -58,12 +61,12 @@ class Dao:
     def add(self, datagram: dict):
         from datetime import datetime, timezone
 
-        tablename = "data"
-
         # Convert Unix timestamp to datetime for 'tm' field
         converted_datagram = datagram.copy()
-        if 'tm' in converted_datagram:
-            converted_datagram['tm'] = datetime.fromtimestamp(converted_datagram['tm'], tz=timezone.utc)
+        if "tm" in converted_datagram:
+            converted_datagram["tm"] = datetime.fromtimestamp(
+                converted_datagram["tm"], tz=timezone.utc
+            )
 
         keys = list(converted_datagram.keys())
         values = tuple(converted_datagram.values())
@@ -72,7 +75,7 @@ class Dao:
         columns = sql.SQL(", ").join(map(sql.Identifier, keys))
         placeholders = sql.SQL(", ").join(sql.Placeholder() * len(keys))
         statement = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
-            sql.Identifier(tablename), columns, placeholders
+            sql.Identifier(self.table_name), columns, placeholders
         )
 
         conn = None

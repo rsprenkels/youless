@@ -9,11 +9,11 @@ log.basicConfig(format="%(asctime)s - %(message)s", level=log.INFO)
 
 
 def youless_reader():
-    write_to_dao = False
+    write_to_dao = True
     if write_to_dao:
         import youless_dao_postgres
 
-        dao = youless_dao_postgres.Dao()
+        dao = youless_dao_postgres.Dao("data_test")
     prev_datagram = None
     while True:
         r = requests.get("http://192.168.2.12/e")
