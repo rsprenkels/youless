@@ -19,7 +19,7 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 
 # the actual executable. It starts the python env, and starts the script
 # DEPENDS ON WorkingDirectory
-ExecStart=/opt/youless_test/venv313/bin/python /opt/youless_test/src/youless_reader.py
+ExecStart=/opt/youless_test/.venv/bin/python /opt/youless_test/src/youless_reader.py
 
 # Restart policy
 Restart=always
