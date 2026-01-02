@@ -5,14 +5,14 @@ import time
 import requests
 from datetime import datetime, timezone
 
-import youless_dao_postgres
-
 log.basicConfig(format="%(asctime)s - %(message)s", level=log.INFO)
 
 
 def youless_reader():
     write_to_dao = False
     if write_to_dao:
+        import youless_dao_postgres
+
         dao = youless_dao_postgres.Dao()
     prev_datagram = None
     while True:

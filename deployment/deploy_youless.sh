@@ -60,9 +60,9 @@ find "${APP_DIR}" -mindepth 1 -type f -delete
 find "${APP_DIR}" -mindepth 1 -type d -empty -delete
 
 # Copy specific application files individually
-install -m 0755 -D "${SRC_DIR}/youless_reader.py" "${APP_DIR}/src/youless_reader.py"
+install -m 0755 -D "${SRC_DIR}/src/youless_reader.py" "${APP_DIR}/youless_reader.py"
 if [[ -f "${SRC_DIR}/requirements.txt" ]]; then
-  install -m 0644 -D "${SRC_DIR}/requirements.txt" "${APP_DIR}/src/requirements.txt"
+  install -m 0644 -D "${SRC_DIR}/src/requirements.txt" "${APP_DIR}/requirements.txt"
 fi
 
 # Copy any additional Python modules from src/ if they exist
@@ -87,6 +87,8 @@ if [[ -n "${VENV_DIR}" && -n "${REQ_FILE}" && -f "${REQ_FILE}" ]]; then
   echo "From python in ${VENV_DIR} installing pip and the modules from ${REQ_FILE}"
   "${VENV_DIR}/bin/python" -m pip install -U pip wheel
   "${VENV_DIR}/bin/python" -m pip install -r "${REQ_FILE}"
+else
+  echo "Skipping venv setup - venv directory ${VENV_DIR} or requirements file ${REQ_FILE} not provided"
 fi
 
 # Reload and restart service

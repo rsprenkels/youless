@@ -33,7 +33,7 @@ pipeline {
             --src "${STAGING}" \
             --unit-src "${STAGING}/systemd/${UNIT_NAME}" \
             --venv "${APP_DIR}/.venv" \
-            --requirements "${STAGING}/requirements.txt"
+            --requirements "${STAGING}/src/requirements.txt"
 
           echo 'Wait briefly (5 sec) for service to fully start'
           sleep 5
@@ -47,8 +47,8 @@ pipeline {
         sh '''#!/bin/bash
           set -euo pipefail
 
-          systemctl is-active --quiet youless.service
-          systemctl --no-pager --full status youless.service | sed -n '1,20p'
+          sudo systemctl is-active --quiet youless.service
+          sudo systemctl --no-pager --full status youless.service | sed -n '1,20p'
         '''
       }
     }

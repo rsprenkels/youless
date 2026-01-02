@@ -62,3 +62,54 @@ CREATE TABLE data (
                     wts int);
 
 ```
+
+## Deploying with Jenkins
+
+user jenkins on the agent needs to be allowed to check out the git repo:
+* add the public key of jenkins@agent (or maybe jenkins@container) as deployment key to the git repo on github; and
+* add the host key of github.com to the known_hosts file of jenkins@agent:
+  +    36  cd .ssh/
+       39  ssh -o StrictHostKeyChecking=yes -T git@github.com
+       40  ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+       41  chmod 600 ~/.ssh/known_hosts
+  +  This is not 100% correct yet. Fiddeling with what runs in the container, versus what runs on the agent.
+
+## create a python venv
+This is handled by the jenkinsfile, also the installation of requirements.txt packages.
+
+## deploy_youless.sh helper script
+give user `jenkins` specific sudo rights:
+```aiignore
+sudo visudo -f /etc/sudoers.d/jenkins-youless
+```
+put the below content into that sudoers file:
+```aiignore
+# Allow jenkins user to run the youless deploy script without password
+jenkins ALL=(root) NOPASSWD: /usr/local/sbin/deploy-youless.sh
+
+# Allow jenkins to check service status (for the smoke check stage)
+jenkins ALL=(root) NOPASSWD: /bin/systemctl is-active youless.service
+jenkins ALL=(root) NOPASSWD: /bin/systemctl status youless.service
+jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl is-active youless.service
+jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl status youless.service
+```
+Set the correct permissions for the sudoers file:
+```aiignore
+sudo chmod 0440 /etc/sudoers.d/jenkins-youless
+```
+Verify:
+```aiignore
+sudo -u jenkins sudo -n /usr/local/sbin/deploy-youless.sh --help
+```
+
+## the daeomn runs as user youless (a non-root, non-sudo, no-login user)
+
+If you need to become user youless, for checking stuff:
+```
+sudo su -s /bin/bash youless
+```
+If you need to check the log output of a running daemon:
+```
+journalctl -u youless.service -n 100 -f
+
+```
