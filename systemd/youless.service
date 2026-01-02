@@ -16,7 +16,7 @@ WorkingDirectory=/opt/youless_test
 # Environment (optional but useful)
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
-EnvironmentFile=-/opt/youless_test/.env
+EnvironmentFile=-/etc/youless/youless.env
 
 # the actual executable. It starts the python env, and starts the script
 # DEPENDS ON WorkingDirectory
