@@ -117,6 +117,11 @@ sudo -u jenkins sudo -n /usr/local/sbin/deploy-youless.sh --help
 
 ## the daeomn runs as user youless (a non-root, non-sudo, no-login user)
 
+Create the user `youless` as a daemon user:
+```aiignore
+sudo useradd -r -s /usr/sbin/nologin -M youless
+```
+
 If you need to become user youless, for checking stuff:
 ```
 sudo su -s /bin/bash youless
