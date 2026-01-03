@@ -16,6 +16,7 @@ WorkingDirectory=/opt/youless_test
 # Environment (optional but useful)
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
+# install the file below locally on the node, it has the postgress credentials
 EnvironmentFile=-/etc/youless/youless.env
 
 # the actual executable. It starts the python env, and starts the script
