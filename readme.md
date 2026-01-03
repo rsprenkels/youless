@@ -87,7 +87,7 @@ This is handled by the jenkinsfile, also the installation of requirements.txt pa
 ## deploy_youless.sh helper script
 give user `jenkins` specific sudo rights:
 ```aiignore
-sudo visudo -f /etc/sudoers.d/jenkins-youless
+sudo EDITOR=vi visudo -f /etc/sudoers.d/jenkins-youless
 ```
 put the below content into that sudoers file:
 ```aiignore
@@ -99,8 +99,9 @@ jenkins ALL=(root) NOPASSWD: /bin/systemctl is-active youless.service
 jenkins ALL=(root) NOPASSWD: /bin/systemctl status youless.service
 jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl is-active youless.service
 jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl status youless.service
+jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl --no-pager --full status youless.service
+jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl is-active --quiet youless.service
 
-TODO: some more lines
 
 ```
 Set the correct permissions for the sudoers file:
@@ -109,6 +110,8 @@ sudo chmod 0440 /etc/sudoers.d/jenkins-youless
 ```
 Verify:
 ```aiignore
+sudo chmod 700 /usr/local/sbin/deploy-youless.sh
+
 sudo -u jenkins sudo -n /usr/local/sbin/deploy-youless.sh --help
 ```
 
