@@ -6,10 +6,9 @@ Wants=network-online.target
 
 [Service]
 # --- Adjust these paths and user/group ---
-User=youless
-Group=youless
-# keep WorkingDirectory the same value as APP_DIR in Jenkinsfile
-WorkingDirectory=/opt/youless_test
+User=daemon
+Group=daemon
+WorkingDirectory=/opt/youless
 # see https://chatgpt.com/s/t_694b156f37dc8191a5740da448e44641 for dealing with env vars
 # -----------------------------------------
 
@@ -21,7 +20,7 @@ EnvironmentFile=-/etc/youless/youless.env
 
 # the actual executable. It starts the python env, and starts the script
 # DEPENDS ON WorkingDirectory
-ExecStart=/opt/youless_test/.venv/bin/python /opt/youless_test/src/youless_reader.py
+ExecStart=/opt/youless/.venv/bin/python /opt/youless/src/youless_reader.py
 
 # Restart policy
 Restart=always
@@ -39,7 +38,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/opt/youless_test
+ReadWritePaths=/opt/youless
 
 [Install]
 WantedBy=multi-user.target
