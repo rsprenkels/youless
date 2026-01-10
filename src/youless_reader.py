@@ -13,7 +13,7 @@ def youless_reader():
     if write_to_dao:
         import youless_dao_postgres
 
-        dao = youless_dao_postgres.Dao("data_test")
+        dao = youless_dao_postgres.Dao("data")
     prev_datagram = None
     while True:
         r = requests.get("http://192.168.2.12/e")
