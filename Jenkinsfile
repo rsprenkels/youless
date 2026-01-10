@@ -15,7 +15,7 @@ pipeline {
 
   environment {
     APP_NAME     = 'youless'
-    APP_DIR      = '/opt/youless_test'
+    APP_DIR      = '/opt/youless'
     UNIT_NAME    = 'youless.service'
     DEPLOY_SCRIPT= '/usr/local/sbin/deploy-youless.sh'
   }
