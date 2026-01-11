@@ -59,19 +59,20 @@ install -d -m 0755 "/etc/systemd/system"
 find "${APP_DIR}" -mindepth 1 -type f -delete
 find "${APP_DIR}" -mindepth 1 -type d -empty -delete
 
-# Copy specific application files individually
-install -m 0755 -D "${SRC_DIR}/src/youless_reader.py" "${APP_DIR}/youless_reader.py"
+# Copy specific source files individually
+install -m 0655 -D "${SRC_DIR}/src/youless_reader.py" "${APP_DIR}/src/youless_reader.py"
+install -m 0655 -D "${SRC_DIR}/src/youless_dao_postgres.py" "${APP_DIR}/src/youless_dao_postgres.py"
 if [[ -f "${SRC_DIR}/requirements.txt" ]]; then
   install -m 0644 -D "${SRC_DIR}/src/requirements.txt" "${APP_DIR}/requirements.txt"
 fi
 
 # Copy any additional Python modules from src/ if they exist
-if [[ -d "${SRC_DIR}/src" ]]; then
-  find "${SRC_DIR}/src" -type f -name "*.py" ! -name "*.pyc" -exec bash -c '
-    rel="${1#${2}/}"
-    install -m 0644 -D "$1" "${3}/$rel"
-  ' _ {} "${SRC_DIR}" "${APP_DIR}" \;
-fi
+#  if [[ -d "${SRC_DIR}/src" ]]; then
+#    find "${SRC_DIR}/src" -type f -name "*.py" ! -name "*.pyc" -exec bash -c '
+#      rel="${1#${2}/}"
+#      install -m 0644 -D "$1" "${3}/$rel"
+#    ' _ {} "${SRC_DIR}" "${APP_DIR}" \;
+#  fi
 
 # Install the unit file with correct permissions
 # (644 is standard for unit files)
