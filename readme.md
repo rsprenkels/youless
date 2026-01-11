@@ -115,7 +115,7 @@ sudo chmod 700 /usr/local/sbin/deploy-youless.sh
 sudo -u jenkins sudo -n /usr/local/sbin/deploy-youless.sh --help
 ```
 
-## the daeomn runs as user youless (a non-root, non-sudo, no-login user)
+## the daemo n runs as user youless (a non-root, non-sudo, no-login user)
 
 Create the user `youless` as a daemon user:
 ```aiignore

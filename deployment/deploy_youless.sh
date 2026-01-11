@@ -60,8 +60,8 @@ find "${APP_DIR}" -mindepth 1 -type f -delete
 find "${APP_DIR}" -mindepth 1 -type d -empty -delete
 
 # Copy specific source files individually
-install -m 0655 -D "${SRC_DIR}/src/youless_reader.py" "${APP_DIR}/src/youless_reader.py"
-install -m 0655 -D "${SRC_DIR}/src/youless_dao_postgres.py" "${APP_DIR}/src/youless_dao_postgres.py"
+install -m 0644 -D "${SRC_DIR}/src/youless_reader.py" "${APP_DIR}/src/youless_reader.py"
+install -m 0644 -D "${SRC_DIR}/src/youless_dao_postgres.py" "${APP_DIR}/src/youless_dao_postgres.py"
 if [[ -f "${SRC_DIR}/requirements.txt" ]]; then
   install -m 0644 -D "${SRC_DIR}/src/requirements.txt" "${APP_DIR}/requirements.txt"
 fi
