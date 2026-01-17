@@ -21,10 +21,10 @@ def youless_reader():
             datagram = json.loads(r.content)[0]
             if prev_datagram is None or datagram["tm"] != prev_datagram["tm"]:
                 prev_datagram = datagram
-                if write_to_dao:
-                    dao.add(datagram)
                 keys_to_keep = ["tm", "net", "pwr", "p1", "p2", "n1", "n2", "gas"]
                 d = {k: datagram[k] for k in keys_to_keep if k in datagram}
+                if write_to_dao:
+                    dao.add(d)
                 d["tm"] = datetime.fromtimestamp(d["tm"], tz=timezone.utc).strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )

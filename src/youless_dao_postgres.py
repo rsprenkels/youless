@@ -45,12 +45,12 @@ class Dao:
             )
 
             conn.commit()
-            print(
+            log.info(
                 f"Connected to PostgreSQL database using table name {self.table_name}"
             )
 
         except Exception as e:
-            print(f"Error connecting to database: {e}")
+            log.error(f"Error connecting to database: {e}")
             raise
         finally:
             if cursor:
@@ -85,6 +85,7 @@ class Dao:
             conn = psycopg2.connect(self.connection_params)
             cursor = conn.cursor()
             cursor.execute(statement, values)
+            log.info(f"ran {statement.as_string(conn)} with values {values}")
             conn.commit()
         except Exception as e:
             if conn:

@@ -37,4 +37,5 @@ WHERE tm >= date_trunc('year', now()) - interval '5 years'
 GROUP BY 1, 2, 3
 
 
-select * from daily_energy_summary;
+select * from daily_energy_summary
+order by day desc
