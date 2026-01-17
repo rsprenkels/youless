@@ -15,7 +15,7 @@ log.basicConfig(
 
 
 def youless_reader():
-    write_to_dao = True
+    write_to_dao = True  # TODO: FIX THIS. Take it from local environment, and NEVER set to not_write in production.
     log.error(f"starting youless_reader {loglevel}")
 
     if write_to_dao:
