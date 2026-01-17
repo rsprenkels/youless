@@ -15,7 +15,7 @@ log.basicConfig(
 
 
 def youless_reader():
-    write_to_dao = False
+    write_to_dao = True
     log.error(f"starting youless_reader {loglevel}")
 
     if write_to_dao:
