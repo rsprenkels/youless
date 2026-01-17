@@ -1,15 +1,23 @@
 #!/usr/bin/python
 import json
 import logging as log
+import os
 import time
 import requests
 from datetime import datetime, timezone
 
-log.basicConfig(format="%(asctime)s - %(message)s", level=log.INFO)
+loglevel = os.getenv("LOG_LEVEL", "INFO").upper()
+
+log.basicConfig(
+    level=getattr(log, loglevel, log.INFO),
+    format="%(asctime)s %(levelname)-5s %(name)s %(message)s",
+)
 
 
 def youless_reader():
-    write_to_dao = True
+    write_to_dao = False
+    log.error(f"starting youless_reader {loglevel}")
+
     if write_to_dao:
         import youless_dao_postgres
 
