@@ -85,7 +85,7 @@ class Dao:
             conn = psycopg2.connect(self.connection_params)
             cursor = conn.cursor()
             cursor.execute(statement, values)
-            log.info(f"ran {statement.as_string(conn)} with values {values}")
+            log.debug(f"ran {statement.as_string(conn)} with values {values}")
             conn.commit()
         except Exception as e:
             if conn:
