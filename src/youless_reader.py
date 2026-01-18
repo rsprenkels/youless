@@ -39,7 +39,12 @@ def youless_reader():
                     "%Y-%m-%d %H:%M:%S"
                 )
                 log.info(f"datagram: {d}")
-            time.sleep(5)
+                # if it was a new datagram, sleep for a little less than 10 seconds -> get in sync with update moment
+                time.sleep(9.5)
+            else:
+                # if its the same, sleep very briefly. We want to know asap if there is new data
+                time.sleep(0.3)
+                log.info("just a quick nap")
 
 
 if __name__ == "__main__":
