@@ -40,11 +40,12 @@ def youless_reader():
                 )
                 log.info(f"datagram: {d}")
                 # if it was a new datagram, sleep for a little less than 10 seconds -> get in sync with update moment
+                log.debug("taking a long nap")
                 time.sleep(9.5)
             else:
                 # if its the same, sleep very briefly. We want to know asap if there is new data
                 time.sleep(0.3)
-                log.info("just a quick nap")
+                log.debug("just a quick nap")
 
 
 if __name__ == "__main__":
