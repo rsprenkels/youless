@@ -15,8 +15,10 @@ log.basicConfig(
 
 
 def youless_reader():
-    write_to_dao = True  # TODO: FIX THIS. Take it from local environment, and NEVER set to not_write in production.
-    log.error(f"starting youless_reader {loglevel}")
+    write_to_dao = os.getenv("WRITE_TO_DAO", "True").upper() in ("TRUE", "1", "YES")
+    log.error(
+        f"starting youless_reader, write_to_dao:{write_to_dao} loglevel:{loglevel}"
+    )
 
     if write_to_dao:
         import youless_dao_postgres
