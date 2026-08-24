@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/grafana/prod/agg_per_day.sql" value="7916959e-47bc-48a3-8908-2a77fa0535af" />
+    <file url="file://$PROJECT_DIR$/grafana/prod/cur_year_per_month.sql" value="7916959e-47bc-48a3-8908-2a77fa0535af" />
+  </component>
+</project>

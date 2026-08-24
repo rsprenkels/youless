@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/grafana/current_year.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/last_and_current_year.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/last_and_current_year_hybrid.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/last_and_current_year_optimized.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/last_n_days.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/measure_query_time.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/prod/agg_per_day.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/prod/create_continues_aggergates.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/prod/cur_year_per_month.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/prod/debug.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/queries.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/grafana/year_cummulative.sql" dialect="PostgreSQL" />
+  </component>
+</project>

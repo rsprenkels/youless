@@ -29,6 +29,24 @@ RestartSec=3
 KillSignal=SIGINT
 TimeoutStopSec=30
 
+# Watchdog.
+# On 2026-05-18 the reader on pi4 blocked forever in recvfrom() on a half-open
+# TCP socket to the meter: the meter accepted the connection and then stopped
+# replying, sending neither FIN nor RST. The process stayed alive and systemd
+# kept reporting "active (running)", so Restart=always never fired and capture
+# was silently dead for 98 days.
+#
+# The reader now pings WATCHDOG=1 once per loop iteration (at most ~10s apart).
+# If the loop stops turning, systemd kills the unit and Restart=always brings it
+# back. NotifyAccess is required for a Type=simple service to be permitted to
+# send those pings.
+#
+# NOTE: this unit and src/youless_reader.py must be deployed TOGETHER. Older
+# code does not ping, so installing this unit alone would make systemd kill the
+# reader every 60 seconds. deploy_youless.sh installs both in one pass.
+NotifyAccess=main
+WatchdogSec=60
+
 # Journald logs
 StandardOutput=journal
 StandardError=journal

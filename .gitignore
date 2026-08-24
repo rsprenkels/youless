@@ -1,0 +1,11 @@
+# Claude Code per-machine settings (permissions, autoMode rules)
+.claude/settings.local.json
+
+# Secrets - contains PG_DSN_FROM / PG_DSN_TO with database passwords
+src/tools/data_sync.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/

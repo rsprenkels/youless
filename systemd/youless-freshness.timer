@@ -1,0 +1,21 @@
+# /etc/systemd/system/youless-freshness.timer
+#
+# Runs the freshness check every 5 minutes. With MAX_LAG_SECONDS=300 that means
+# a stopped capture is flagged within about 10 minutes worst case -- against the
+# 98 days the pi4 outage went unnoticed.
+#
+# Enable with:  sudo systemctl enable --now youless-freshness.timer
+# Inspect with: systemctl list-timers youless-freshness.timer
+
+[Unit]
+Description=Run the youless capture freshness check every 5 minutes
+
+[Timer]
+# Wait for the reader to have a chance to write something after a reboot.
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

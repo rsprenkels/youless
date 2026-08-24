@@ -44,7 +44,8 @@ SELECT
     coalesce(last(p1, tm) - first(p1, tm), 0) + coalesce(last(p2, tm) - first(p2, tm), 0) as from_net,
     coalesce(first(n1, tm) - last(n1, tm), 0) + coalesce(first(n2, tm) - last(n2, tm), 0) as to_net
 FROM data
-WHERE tm >= date_trunc('month', now())
+WHERE tm > now() - interval '32 day'   -- prune guard: bare now() lets TimescaleDB exclude chunks at PLAN time
+  AND tm >= date_trunc('month', now())
   AND tm < date_trunc('month', now()) + interval '1 month'
 
 ORDER BY time ASC;

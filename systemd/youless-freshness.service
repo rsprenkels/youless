@@ -1,0 +1,31 @@
+# /etc/systemd/system/youless-freshness.service
+#
+# Outcome check: is every node still writing rows? Complements the watchdog in
+# youless.service, which only proves the reader's loop is turning.
+#
+# Triggered by youless-freshness.timer, not enabled directly.
+# On failure the unit enters failed state, so `systemctl --failed` and
+# `journalctl -u youless-freshness` both show it.
+
+[Unit]
+Description=Check that youless capture is still writing rows on every node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# PGUSER / PGPASSWORD / PGDATABASE / NODES / MAX_LAG_SECONDS
+# Install this file yourself on each node; it holds the database password.
+EnvironmentFile=/etc/youless/freshness.env
+
+ExecStart=/usr/bin/python3 /usr/local/sbin/youless-freshness.py
+
+# psql is deliberately not used: pi4 has no postgresql-client package,
+# while both nodes already ship python3 + psycopg2.
+
+# Hardening: this only needs to open outbound database connections.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
