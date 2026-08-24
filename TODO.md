@@ -1,60 +1,68 @@
 # TODO
 
-Open items, most-worth-doing first within each group. Detail below the index.
+Most-worth-doing first within each group. Detail below the index.
 
-| # | Item | Group |
-|---|------|-------|
-| 1 | [Add the freshness check to the deploy pipeline](#1-add-the-freshness-check-to-the-deploy-pipeline) | code |
-| 2 | [Make the freshness check actually reach someone](#2-make-the-freshness-check-actually-reach-someone) | code |
-| 3 | [Reuse the database connection in the DAO](#3-reuse-the-database-connection-in-the-dao) | code |
-| 4 | [Repo SQL is stale vs the deployed dashboard](#4-repo-sql-is-stale-vs-the-deployed-dashboard) | repo |
-| 5 | [Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries) | repo |
-| 6 | [Deploy 72da7c2](#6-deploy-72da7c2) | ops |
-| 7 | [Confirm graceful shutdown on the next deploy](#7-confirm-graceful-shutdown-on-the-next-deploy) | ops |
-| 8 | [Check the monthly aggregate on 1 September](#8-check-the-monthly-aggregate-on-1-september) | ops |
-| 9 | [pi4 is 82% full](#9-pi4-is-82-full) | ops |
-| 10 | [Jenkins GUI is slow over the tunnel](#10-jenkins-gui-is-slow-over-the-tunnel) | ops |
-| 11 | [Untracked files](#11-untracked-files) | housekeeping |
-| 12 | [Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader) | housekeeping |
-| 13 | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
+**Marking an item done:** put a `[x]` in the Status column, strike the title with
+`~~ ~~`, and add a `**Done YYYY-MM-DD**` line at the top of its detail section
+saying what actually happened. Keep the row and its number -- numbers are stable
+so references from commits and notes do not rot.
+
+| # | Status | Item | Group |
+|---|:------:|------|-------|
+| 1 | **[x]** | ~~[Add the freshness check to the deploy pipeline](#1-add-the-freshness-check-to-the-deploy-pipeline)~~ | code |
+| 2 | [ ] | [Make the freshness check actually reach someone](#2-make-the-freshness-check-actually-reach-someone) | code |
+| 3 | [ ] | [Reuse the database connection in the DAO](#3-reuse-the-database-connection-in-the-dao) | code |
+| 4 | [ ] | [Repo SQL is stale vs the deployed dashboard](#4-repo-sql-is-stale-vs-the-deployed-dashboard) | repo |
+| 5 | [ ] | [Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries) | repo |
+| 6 | [ ] | [Deploy 72da7c2](#6-deploy-72da7c2) | ops |
+| 7 | [ ] | [Confirm graceful shutdown on the next deploy](#7-confirm-graceful-shutdown-on-the-next-deploy) | ops |
+| 8 | [ ] | [Check the monthly aggregate on 1 September](#8-check-the-monthly-aggregate-on-1-september) | ops |
+| 9 | [ ] | [pi4 is 82% full](#9-pi4-is-82-full) | ops |
+| 10 | [ ] | [Jenkins GUI is slow over the tunnel](#10-jenkins-gui-is-slow-over-the-tunnel) | ops |
+| 11 | **[x]** | ~~[Untracked files](#11-untracked-files)~~ | housekeeping |
+| 12 | [ ] | [Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader) | housekeeping |
+| 13 | [ ] | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
+
+**11 open, 2 done.**
 
 Known and accepted, no action planned: [historical duplicates](#historical-duplicate-timestamps),
-[meter sample skips](#meter-sample-skips). Recently done: [winkinfo removal](#done).
+[meter sample skips](#meter-sample-skips). Also done, before this list existed:
+[winkinfo removal](#done).
 
 ---
 
 ## 1. Add the freshness check to the deploy pipeline
 
-`deployment/youless-freshness.py`, `systemd/youless-freshness.service` and
-`systemd/youless-freshness.timer` are **hand-installed** on patricia and pi4
-(2026-08-24). `deployment/deploy_youless.sh` does not know about them, so a
-rebuilt or newly added node silently comes up with no capture monitoring at all
--- exactly the blind spot that let pi4 sit dead for 98 days.
+**Done 2026-08-25.** `deployment/deploy_youless.sh` now installs
+`youless-freshness.py` to `/usr/local/sbin/` and both units to
+`/etc/systemd/system/`, then enables the timer. A rebuilt or newly added node
+comes up with monitoring instead of silently without it.
 
-What the deploy script needs, alongside what it already installs:
+The timer is enabled **only if `/etc/youless/freshness.env` exists**. That file
+holds the database password and is node-specific (`NODES` names this node and
+its peers), so it stays hand-provisioned and the deploy never overwrites it. If
+it is missing the deploy prints a warning and leaves the timer alone -- enabling
+a unit that could only fail would train you to ignore `systemctl --failed`,
+which defeats the point of having it.
+
+Manual steps that cannot be automated are written up in **[INSTALL.md](INSTALL.md)**:
+database and schema, the two secret env files, the sudoers rule, the Jenkins
+agent, and the `DEPLOY_TARGET` choice in the `Jenkinsfile` (hardcoded, so a new
+node needs a commit).
+
+### Still requires a manual step to take effect
+
+`deploy_youless.sh` runs from `/usr/local/sbin/deploy-youless.sh` and the
+sudoers rule pins that path, so **editing it in git changes nothing** until it
+is copied onto each node:
 
 ```sh
-install -m 0755 -D "${SRC_DIR}/deployment/youless-freshness.py" /usr/local/sbin/youless-freshness.py
-install -m 0644    "${SRC_DIR}/systemd/youless-freshness.service" /etc/systemd/system/
-install -m 0644    "${SRC_DIR}/systemd/youless-freshness.timer"   /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now youless-freshness.timer
+sudo install -m 0700 -o root -g root \
+  deployment/deploy_youless.sh /usr/local/sbin/deploy-youless.sh
 ```
 
-### Gotchas
-
-- **`/etc/youless/freshness.env` holds the database password** and must stay out
-  of the repo. The deploy must not overwrite it -- create only when absent, or
-  leave it to manual provisioning like `/etc/youless/youless.env`.
-- **The env file is node-specific.** Each node checks itself *and* its peer:
-  patricia has `NODES="localhost pi4"`, pi4 has `NODES="localhost patricia"`.
-  So it cannot be one shared template; either derive `NODES` from the local
-  hostname at install time, or keep provisioning by hand.
-- `enable --now` is only needed on first install but is idempotent.
-- The script's `find "${APP_DIR}" -mindepth 1 -type f -delete` only clears
-  `/opt/youless`; it does not touch `/usr/local/sbin` or `/etc/systemd/system`.
-- No sudoers change needed -- the existing rule grants the whole script, which
-  already runs as root.
+Until that is done on patricia and pi4, their deploys still run the old script
+and will not install the freshness check.
 
 ## 2. Make the freshness check actually reach someone
 
@@ -190,9 +198,23 @@ trip instead of hundreds.
 
 ## 11. Untracked files
 
-- `data/youless.data` -- binary SQLite from the old implementation. Gitignore
-  rather than commit.
-- `.aiignore`, `notes_youless.txt` -- pre-existing; decide to track or ignore.
+**Done 2026-08-25.** Working tree is clean; nothing untracked remains.
+
+- `data/youless.data` -- **deleted.** Inspected first: one table `data`, **zero
+  rows**, 8,192 bytes (just the SQLite header page plus an empty table page),
+  dated 2025-12-22. It carried the original 14-column schema including `cs0`,
+  `ps0`, `wtr`, `wts` -- the four columns since dropped from Postgres -- so it
+  was a leftover skeleton from the SQLite era the readme still describes, never
+  written to. That column history is already recorded in the comments of
+  `deployment/schema.sql`, so nothing was lost.
+- `.aiignore`, `notes_youless.txt` -- **now tracked**, committed in `4fcf697`.
+  Note this was not deliberate: they were already staged (most likely by the
+  IDE) when that commit was made, and `git commit` took the whole index. Both
+  are small and belong in the repo -- `.aiignore` is 15 lines of tool ignore
+  patterns, `notes_youless.txt` is two reference URLs plus a sample datagram,
+  and neither contains anything sensitive -- so the outcome stands.
+
+`.aiignore` still lists `data/`, which is now moot.
 
 ## 12. Second Jenkins job: youless_reader
 

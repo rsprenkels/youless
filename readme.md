@@ -1,133 +1,101 @@
-# Project to read time series data from a youless, and visualize with garafana
-## Goals
-* run a data gathering daemon that stores in SQLite
-* do remote development over ssh to pi
-* setup Grafana in docker, and attach to SQLite datasource
-* have a dashboard app visible remotely on phone
+# youless
 
-## Remote development
+Reads time-series data from a YouLess LS120 energy meter and visualises it in
+Grafana.
 
-## install youless reader as systemd service
+**Setting up a new machine? See [INSTALL.md](INSTALL.md).** That is the
+authoritative runbook; this file is an overview. Install steps used to live here
+too and drifted out of date, so they now live in exactly one place.
 
-The youless daemon runs as a dedicated user called youless.
+## How it works
 
-## Deploying with Jenkins
-
-
-### run a Jenkins agent on the target machine
-
-read https://chatgpt.com/s/t_69584986d5c48191978cfd8d452d0e65
-
-user jenkins on the agent needs to be allowed to check out the git repo:
-* create a user `jenkins` on the agent:
-```aiignore
-sudo useradd \
-  --system \
-  --user-group \
-  --create-home \
-  --home-dir /var/lib/jenkins \
-  --shell /usr/bin/bash \
-  jenkins
-```
-Also create the location for the agent to check out stuff:
-````aiignore
-sudo -u jenkins mkdir -p /var/lib/jenkins/agent
-sudo -u jenkins chmod 700 /var/lib/jenkins/agent
-
-````
-
-Install java:
-````aiignore
-sudo apt update && sudo apt install -y openjdk-17-jre-headless 
-````
-
-In the Jenkins controller container:
-```aiignore
-docker exec -it <jenkins_container_name> bash -lc '
-mkdir -p /var/jenkins_home/.ssh
-chmod 700 /var/jenkins_home/.ssh
-ssh-keyscan -H 192.168.2.25 >> /var/jenkins_home/.ssh/known_hosts
-chmod 600 /var/jenkins_home/.ssh/known_hosts
-'
+A small Python daemon polls the meter's JSON endpoint (`http://192.168.2.12/e`)
+and writes every new sample into a local TimescaleDB. Grafana queries that
+database.
 
 ```
-
-* Generate a key pair, and add the public key of jenkins@agent as deployment key to the git repo on github; and
-* Add the host key of github.com to the known_hosts file of jenkins@agent:
-```
-ssh-keygen -t ed25519 -C "jenkins@<agent_name>"
-
-cd .ssh/
-ssh -o StrictHostKeyChecking=yes -T git@github.com
-ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
-chmod 600 ~/.ssh/known_hosts
-```
-## Postgress TimescaleDB
-```aiignore
-services:
-  timescaledb:
-    image: timescale/timescaledb:latest-pg16
-    container_name: timescaledb
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: timescale
-      POSTGRES_USER: tsdb
-      POSTGRES_PASSWORD: <<secret>>
-    ports:
-      - "5432:5432"
-    volumes:
-      - /opt/timescaledb/data:/var/lib/postgresql/data
+YouLess LS120  --HTTP-->  youless_reader.py  --INSERT-->  TimescaleDB  <--  Grafana
 ```
 
+The meter emits a new reading roughly every 10 seconds. The reader polls
+quickly (0.3s) while waiting for the timestamp to change, then sleeps ~9.5s once
+it has stored one, staying in step with the meter rather than drifting.
 
+### Redundancy
 
-## create a python venv
-This is handled by the jenkinsfile, also the installation of requirements.txt packages.
+There are **two independent nodes**, `patricia` and `pi4`. Each polls the meter
+itself and writes to its own database. Neither depends on the other, so a deploy
+or an outage on one does not interrupt capture on the other.
 
-## deploy_youless.sh helper script
-give user `jenkins` specific sudo rights:
-```aiignore
-sudo EDITOR=vi visudo -f /etc/sudoers.d/jenkins-youless
+They are kept in step by `src/tools/data_sync.py`, which compares per-month row
+counts and backfills only what is missing.
+
+### Keeping it honest
+
+Two independent mechanisms, because they catch different failures:
+
+- **A systemd watchdog** (`WatchdogSec=60`). The reader pings once per loop
+  iteration; if the loop stops turning, systemd restarts it. This exists because
+  the reader once blocked forever in `recvfrom()` on a half-open socket to the
+  meter, while systemd still reported the unit `active (running)` -- capture was
+  dead for 98 days and nothing noticed.
+- **A freshness check** (`youless-freshness.py`, on a 5-minute timer). Each node
+  verifies that every node is still *storing rows*. The watchdog cannot see a
+  reader that runs fine while the database is unreachable; this can.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `src/youless_reader.py` | the polling daemon |
+| `src/youless_dao_postgres.py` | database writes; verifies schema at startup |
+| `src/tools/data_sync.py` | backfills a node from a peer |
+| `deployment/schema.sql` | authoritative database schema |
+| `deployment/perf-*.sql` | applied migrations, with measurements |
+| `deployment/deploy_youless.sh` | privileged deploy helper Jenkins calls |
+| `deployment/youless-freshness.py` | capture monitoring |
+| `systemd/` | unit files |
+| `grafana/` | panel queries (see caveat in TODO.md) |
+| `INSTALL.md` | fresh-node runbook |
+| `TODO.md` | open work, with a status column |
+
+## Deploying
+
+Push to `main`, then run the `youless_pipeline` job in Jenkins with
+`DEPLOY_TARGET` set to a node label (`pi` or `patricia`).
+
+**Deploy one node at a time and verify before the next.** They are independent,
+so this keeps capture alive if a release misbehaves.
+
+## Operating it
+
+```sh
+# follow the log (microsecond timestamps; the default second granularity hides
+# fast shutdown sequences)
+journalctl -u youless.service -f -o short-precise
+
+# is it healthy?
+systemctl show youless.service -p ActiveState -p NRestarts -p WatchdogTimestamp
+
+# is it actually storing data? lag should be under ~15s
+psql -h localhost -U tsdb -d timescale -c \
+  "SELECT count(*), max(tm), now()-max(tm) AS lag FROM data;"
+
+# run the freshness check by hand
+sudo systemctl start youless-freshness.service
+journalctl -u youless-freshness.service -n 5 --no-pager
 ```
-put the below content into that sudoers file:
-```aiignore
-# Allow jenkins user to run the youless deploy script without password
-jenkins ALL=(root) NOPASSWD: /usr/local/sbin/deploy-youless.sh
 
-# Allow jenkins to check service status (for the smoke check stage)
-jenkins ALL=(root) NOPASSWD: /bin/systemctl is-active youless.service
-jenkins ALL=(root) NOPASSWD: /bin/systemctl status youless.service
-jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl is-active youless.service
-jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl status youless.service
-jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl --no-pager --full status youless.service
-jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl is-active --quiet youless.service
+A clean restart logs `Received signal 2`, one final `datagram:`, then
+`exit requested, exiting now` -- it captures a last sample before exiting, so a
+restart costs no data.
 
+## Notes
 
-```
-Set the correct permissions for the sudoers file:
-```aiignore
-sudo chmod 0440 /etc/sudoers.d/jenkins-youless
-```
-Verify:
-```aiignore
-sudo chmod 700 /usr/local/sbin/deploy-youless.sh
-
-sudo -u jenkins sudo -n /usr/local/sbin/deploy-youless.sh --help
-```
-
-## the daemo n runs as user youless (a non-root, non-sudo, no-login user)
-
-Create the user `youless` as a daemon user:
-```aiignore
-sudo useradd -r -s /usr/sbin/nologin -M youless
-```
-
-If you need to become user youless, for checking stuff:
-```
-sudo su -s /bin/bash youless
-```
-If you need to check the log output of a running daemon:
-```
-journalctl -u youless.service -n 100 -f
-
-```
+- The meter address is **hardcoded** in `src/youless_reader.py`, not configured.
+- The daemon runs as `User=daemon`. Earlier versions of this file said to create
+  a `youless` user; that account exists on the current nodes but nothing runs as
+  it.
+- `PG_DSN` comes from `/etc/youless/youless.env`, which is not in git.
+- Meter readings are cumulative counters, so a dropped sample does not affect
+  any daily or monthly total -- it shows only as a gap in the `pwr` series.

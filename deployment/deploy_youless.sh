@@ -11,9 +11,16 @@ deploy-youless.sh --app-dir /opt/youless --unit youless.service --src /path/to/s
 Performs an atomic-ish deploy:
 - syncs application files into APP_DIR (excluding .git etc.)
 - installs/updates the systemd unit into /etc/systemd/system/
+- installs the capture-freshness check and its service+timer, and enables the
+  timer if /etc/youless/freshness.env exists (that file is provisioned by hand,
+  see INSTALL.md)
 - runs systemctl daemon-reload
 - restarts the service
 - optionally updates a python venv from requirements.txt
+
+NOTE: this script is installed at /usr/local/sbin/deploy-youless.sh and the
+sudoers rule pins that path, so editing it in git is not enough -- copy it onto
+each node by hand. See INSTALL.md.
 EOF
 }
 
@@ -92,8 +99,42 @@ else
   echo "Skipping venv setup - venv directory ${VENV_DIR} or requirements file ${REQ_FILE} not provided"
 fi
 
+# --- capture-freshness monitoring -------------------------------------------
+# Installed by the deploy rather than by hand, so a rebuilt or newly added node
+# comes up WITH monitoring. Hand-installing it is how pi4 ended up capturing
+# nothing for 98 days with no alarm.
+#
+# Skipped quietly when the sources are absent, so this script still works
+# against an older workspace.
+FRESHNESS_SRC="${SRC_DIR}/deployment/youless-freshness.py"
+if [[ -f "${FRESHNESS_SRC}" ]]; then
+  install -m 0755 -D "${FRESHNESS_SRC}" /usr/local/sbin/youless-freshness.py
+  install -m 0644 "${SRC_DIR}/systemd/youless-freshness.service" /etc/systemd/system/
+  install -m 0644 "${SRC_DIR}/systemd/youless-freshness.timer"   /etc/systemd/system/
+  echo "Installed capture-freshness check and units"
+else
+  echo "No ${FRESHNESS_SRC} in this workspace; skipping freshness check install"
+fi
+
 # Reload and restart service
 /bin/systemctl daemon-reload
+
+# Enable the freshness timer only once its config exists. /etc/youless/freshness.env
+# holds the database password AND differs per node (NODES names this node and its
+# peer), so it is provisioned by hand -- see INSTALL.md. Never overwrite it, and
+# never enable a timer that could only fail: a permanently-failed unit trains you
+# to ignore `systemctl --failed`, which defeats the point of having it.
+if [[ -f /etc/systemd/system/youless-freshness.timer ]]; then
+  if [[ -f /etc/youless/freshness.env ]]; then
+    /bin/systemctl enable --now youless-freshness.timer
+    echo "Enabled youless-freshness.timer"
+  else
+    echo "WARNING: /etc/youless/freshness.env is missing -- freshness timer NOT enabled."
+    echo "         This node has NO capture monitoring. See INSTALL.md, then run:"
+    echo "           sudo systemctl enable --now youless-freshness.timer"
+  fi
+fi
+
 /bin/systemctl restart "${UNIT_NAME}"
 
 # Optional: show a brief status summary (useful in Jenkins logs)
