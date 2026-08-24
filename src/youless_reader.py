@@ -51,7 +51,7 @@ def _request_shutdown(signum, frame):
 
 def youless_reader():
     write_to_dao = os.getenv("WRITE_TO_DAO", "True").upper() in ("TRUE", "1", "YES")
-    log.error(
+    log.info(
         f"starting youless_reader, write_to_dao:{write_to_dao} loglevel:{loglevel}"
     )
 
