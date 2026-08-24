@@ -1,0 +1,7 @@
+https://www.youless.nl/home.html
+
+https://wiki.td-er.nl/index.php?title=YouLess
+
+http://192.168.2.12/e
+[{"tm":1737238427,"net": 22431.555,"pwr": 310,"ts0":1736232600,"cs0": 0.000,"ps0": 0,"p1": 15587.644,"p2": 15456.939,"n1": 2790.778,"n2": 5822.250,"gas": 10448.733,"gts":2501182300,"wtr": 0.000,"wts":0}]
+
