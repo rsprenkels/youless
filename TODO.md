@@ -20,10 +20,10 @@ so references from commits and notes do not rot.
 | 9 | [ ] | [pi4 is 82% full](#9-pi4-is-82-full) | ops |
 | 10 | [ ] | [Jenkins GUI is slow over the tunnel](#10-jenkins-gui-is-slow-over-the-tunnel) | ops |
 | 11 | **[x]** | ~~[Untracked files](#11-untracked-files)~~ | housekeeping |
-| 12 | [ ] | [Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader) | housekeeping |
+| 12 | **[x]** | ~~[Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader)~~ | housekeeping |
 | 13 | [ ] | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
 
-**11 open, 2 done.**
+**10 open, 3 done.**
 
 Known and accepted, no action planned: [historical duplicates](#historical-duplicate-timestamps),
 [meter sample skips](#meter-sample-skips). Also done, before this list existed:
@@ -218,8 +218,27 @@ trip instead of hundreds.
 
 ## 12. Second Jenkins job: youless_reader
 
-A second job on the same repo alongside `youless_pipeline`. Unclear whether it is
-still wanted. Delete if not.
+**Done 2026-08-29.** Deleted. It was a freestyle job pointed at the same repo
+with `<builders/>` empty -- it checked out `main` and did nothing else. No
+triggers, no publishers, no build step. The last of its 5 builds ran on
+2026-01-02, and `youless_pipeline` had long since superseded it.
+
+Removed `/var/jenkins_home/jobs/youless_reader` inside the container, plus the
+stale 9.7M agent workspace at `/var/jenkins/workspace/youless_reader{,@tmp}` on
+the host, then restarted the container so the controller re-read its jobs from
+disk.
+
+The restart was the auth-free route: the Jenkins API rejects anonymous requests
+with 403 and **no Jenkins API token exists** -- the token in `~/.grafana_token`
+is Grafana's, see [#13](#13-grafana-service-account-token). Jenkins was idle, and
+came back up in 20 seconds. Note that a deleted job cannot be confirmed over
+HTTP without credentials either: Jenkins checks permission before existence, so
+the URL returns 403 rather than 404. Disk state and a clean startup log are the
+verification.
+
+Config and all 5 build records are backed up at
+`~/youless_reader-job-backup.tgz` on patricia (4.7K). Delete that once you are
+satisfied the job is gone for good.
 
 ## 13. Grafana service-account token
 
