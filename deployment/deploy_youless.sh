@@ -7,6 +7,7 @@ usage() {
   cat <<'EOF'
 deploy-youless.sh --app-dir /opt/youless --unit youless.service --src /path/to/src --unit-src /path/to/youless.service
                  [--venv /opt/youless/.venv] [--requirements /path/to/requirements.txt]
+                 [--python /usr/bin/python3]
 
 Performs an atomic-ish deploy:
 - syncs application files into APP_DIR (excluding .git etc.)
@@ -30,6 +31,9 @@ SRC_DIR=""
 UNIT_SRC=""
 VENV_DIR=""
 REQ_FILE=""
+# Interpreter the venv is built from. Defaults to Debian's, deliberately: the venv
+# should depend on a dpkg-managed python, not on a hand-built one in /usr/local.
+PYTHON_BIN="/usr/bin/python3"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +43,7 @@ while [[ $# -gt 0 ]]; do
     --unit-src)      UNIT_SRC="$2"; shift 2 ;;
     --venv)          VENV_DIR="$2"; shift 2 ;;
     --requirements)  REQ_FILE="$2"; shift 2 ;;
+    --python)        PYTHON_BIN="$2"; shift 2 ;;
     -h|--help)       usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -62,14 +67,30 @@ echo "deploy_youless.sh is starting."
 install -d -m 0755 "$APP_DIR"
 install -d -m 0755 "/etc/systemd/system"
 
-# Delete existing application files (preserving directory structure)
-find "${APP_DIR}" -mindepth 1 -type f -delete
-find "${APP_DIR}" -mindepth 1 -type d -empty -delete
+# Delete existing application files (preserving directory structure).
+#
+# .venv and data are excluded, and that exclusion is load-bearing. -type f does not
+# match symlinks, so without it this wiped every real file out of the venv --
+# pyvenv.cfg, site-packages, the lot -- while leaving bin/python, bin/python3 and
+# lib64 behind, because those are symlinks. What survived looked enough like a venv
+# that the guard below skipped rebuilding it, and pip then installed into whatever
+# the base interpreter was. That is how both nodes ended up with a decoy .venv and
+# their dependencies in /usr/local. See INSTALL.md.
+find "${APP_DIR}" -mindepth 1 -type f \
+     -not -path "${APP_DIR}/.venv/*" \
+     -not -path "${APP_DIR}/data/*" -delete
+find "${APP_DIR}" -mindepth 1 -depth -type d -empty \
+     -not -path "${APP_DIR}/.venv" -not -path "${APP_DIR}/.venv/*" \
+     -not -path "${APP_DIR}/data"  -not -path "${APP_DIR}/data/*" -delete
 
 # Copy specific source files individually
 install -m 0644 -D "${SRC_DIR}/src/youless_reader.py" "${APP_DIR}/src/youless_reader.py"
 install -m 0644 -D "${SRC_DIR}/src/youless_dao_postgres.py" "${APP_DIR}/src/youless_dao_postgres.py"
-if [[ -f "${SRC_DIR}/requirements.txt" ]]; then
+# Tested and installed from the same path. It used to test ${SRC_DIR}/requirements.txt
+# while installing ${SRC_DIR}/src/requirements.txt, so on a workspace where the file
+# lives under src/ -- which is every workspace -- the test failed and APP_DIR never
+# got a copy at all.
+if [[ -f "${SRC_DIR}/src/requirements.txt" ]]; then
   install -m 0644 -D "${SRC_DIR}/src/requirements.txt" "${APP_DIR}/requirements.txt"
 fi
 
@@ -88,9 +109,22 @@ install -m 0644 "$UNIT_SRC" "/etc/systemd/system/${UNIT_NAME}"
 # Optional: build/update venv (recommended to run as a non-root service user in the unit file)
 # Here we update the venv as root because this script is root-run; that’s acceptable if APP_DIR is root-owned.
 if [[ -n "${VENV_DIR}" && -n "${REQ_FILE}" && -f "${REQ_FILE}" ]]; then
-  if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
-    echo "creating a python3 virtual environment in ${VENV_DIR}"
-    python3 -m venv "${VENV_DIR}"
+  # Test pyvenv.cfg, not -x bin/python. bin/python is a symlink and stays executable
+  # even when every real file in the venv has been deleted, so the old test could
+  # never detect a gutted venv and never rebuilt one. pyvenv.cfg is what actually
+  # makes an interpreter treat the directory as a venv: no pyvenv.cfg, no isolation,
+  # and pip silently installs into the base interpreter instead.
+  if [[ ! -f "${VENV_DIR}/pyvenv.cfg" ]]; then
+    echo "no ${VENV_DIR}/pyvenv.cfg -- (re)creating the virtual environment with ${PYTHON_BIN}"
+    rm -rf "${VENV_DIR}"
+    "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+  fi
+
+  # Belt and braces: refuse to continue if the result is still not a venv, rather
+  # than letting pip write into the system interpreter again.
+  if ! "${VENV_DIR}/bin/python" -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)'; then
+    echo "Refusing: ${VENV_DIR} is not a virtual environment after creation" >&2
+    exit 4
   fi
   echo "From python in ${VENV_DIR} installing pip and the modules from ${REQ_FILE}"
   "${VENV_DIR}/bin/python" -m pip install -U pip wheel

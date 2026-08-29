@@ -19,10 +19,17 @@ Type=oneshot
 # Install this file yourself on each node; it holds the database password.
 EnvironmentFile=/etc/youless/freshness.env
 
-ExecStart=/usr/bin/python3 /usr/local/sbin/youless-freshness.py
+# Runs from the application venv, not from /usr/bin/python3. Until 2026-08-29 this
+# said /usr/bin/python3, which only worked because that symlink had been repointed
+# away from Debian's python3 to a hand-built interpreter in /usr/local -- the only
+# place psycopg2 was installed. Restoring the symlink to what dpkg ships therefore
+# broke this unit, and nothing else on the box, which is a bad way to find out.
+# The venv owns its dependencies, so this line no longer depends on what
+# /usr/bin/python3 happens to point at.
+ExecStart=/opt/youless/.venv/bin/python /usr/local/sbin/youless-freshness.py
 
 # psql is deliberately not used: pi4 has no postgresql-client package,
-# while both nodes already ship python3 + psycopg2.
+# while the venv built by the deploy already carries psycopg2.
 
 # Hardening: this only needs to open outbound database connections.
 NoNewPrivileges=true

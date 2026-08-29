@@ -256,7 +256,7 @@ Do **not** do these by hand; `deploy-youless.sh` handles them on every run:
 | | |
 |---|---|
 | `/opt/youless/src/*.py` | reader and DAO |
-| `/opt/youless/.venv` | created if absent, `pip install -r requirements.txt` |
+| `/opt/youless/.venv` | rebuilt whenever `pyvenv.cfg` is missing, then `pip install -r requirements.txt` **into it**. Built from `--python`, default `/usr/bin/python3`. Preserved across deploys, along with `data/` |
 | `/etc/systemd/system/youless.service` | the unit, including `WatchdogSec=60` |
 | `/usr/local/sbin/youless-freshness.py` | the freshness check |
 | `youless-freshness.{service,timer}` | its units, timer enabled when `freshness.env` exists |
@@ -275,3 +275,16 @@ Do **not** do these by hand; `deploy-youless.sh` handles them on every run:
   password and differs per node.
 - **A node with no `freshness.env` has no monitoring** and will not tell you so
   beyond one warning line in the deploy log.
+- **`.venv` must contain `pyvenv.cfg`, and nothing else counts.** Both nodes ran
+  for months on a `.venv` that was only three symlinks and no `pyvenv.cfg`. An
+  interpreter in such a directory is not in a venv at all -- `sys.prefix ==
+  sys.base_prefix` -- so `pip install` silently wrote into the *system*
+  interpreter, and the reader imported `psycopg2` from `/usr/local` while
+  appearing to run from a venv. Two old bugs in the deploy caused it and both are
+  fixed as of 2026-08-29: `find -type f -delete` gutted the venv without removing
+  its symlinks, and the rebuild guard tested `-x bin/python`, which a surviving
+  symlink satisfies. To check a node:
+  ```bash
+  /opt/youless/.venv/bin/python -c 'import sys; print(sys.prefix != sys.base_prefix)'
+  ```
+  It must print `True`. If it prints `False`, delete `.venv` and redeploy.
