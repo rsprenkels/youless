@@ -14,6 +14,7 @@ so references from commits and notes do not rot.
 | 3 | [ ] | [Reuse the database connection in the DAO](#3-reuse-the-database-connection-in-the-dao) | code |
 | 4 | [ ] | [Repo SQL is stale vs the deployed dashboard](#4-repo-sql-is-stale-vs-the-deployed-dashboard) | repo |
 | 5 | [ ] | [Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries) | repo |
+| 14 | **[x]** | ~~[Install the current deploy script on patricia and pi4](#14-install-the-current-deploy-script-on-patricia-and-pi4)~~ | ops |
 | 6 | [ ] | [Deploy 72da7c2](#6-deploy-72da7c2) | ops |
 | 7 | [ ] | [Confirm graceful shutdown on the next deploy](#7-confirm-graceful-shutdown-on-the-next-deploy) | ops |
 | 8 | [ ] | [Check the monthly aggregate on 1 September](#8-check-the-monthly-aggregate-on-1-september) | ops |
@@ -23,7 +24,7 @@ so references from commits and notes do not rot.
 | 12 | **[x]** | ~~[Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader)~~ | housekeeping |
 | 13 | [ ] | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
 
-**10 open, 3 done.**
+**10 open, 4 done.**
 
 Known and accepted, no action planned: [historical duplicates](#historical-duplicate-timestamps),
 [meter sample skips](#meter-sample-skips). Also done, before this list existed:
@@ -50,19 +51,16 @@ database and schema, the two secret env files, the sudoers rule, the Jenkins
 agent, and the `DEPLOY_TARGET` choice in the `Jenkinsfile` (hardcoded, so a new
 node needs a commit).
 
-### Still requires a manual step to take effect
+### Required a manual step to take effect -- since done
 
-`deploy_youless.sh` runs from `/usr/local/sbin/deploy-youless.sh` and the
-sudoers rule pins that path, so **editing it in git changes nothing** until it
-is copied onto each node:
+The pipeline changes above do nothing until the new script is installed on each
+node by hand. This section used to say that step was still outstanding on
+patricia and pi4. **That was stale:** both nodes were verified on 2026-08-29 to
+be running the current script with the freshness timer live.
 
-```sh
-sudo install -m 0700 -o root -g root \
-  deployment/deploy_youless.sh /usr/local/sbin/deploy-youless.sh
-```
-
-Until that is done on patricia and pi4, their deploys still run the old script
-and will not install the freshness check.
+Tracked as its own row now -- **[#14](#14-install-the-current-deploy-script-on-patricia-and-pi4)**,
+with the evidence -- because an open action buried inside a `[x]` item is easy to
+miss, and this one silently sat done-but-unrecorded.
 
 ## 2. Make the freshness check actually reach someone
 
@@ -244,6 +242,55 @@ satisfied the job is gone for good.
 
 Created 2026-08-24 for the dashboard API work, still active, with the token in
 `~/.grafana_token` on patricia. Revoke both if it was only for that.
+
+## 14. Install the current deploy script on patricia and pi4
+
+**Done -- confirmed 2026-08-29.** Split out of
+[#1](#1-add-the-freshness-check-to-the-deploy-pipeline), whose note claimed this
+was still outstanding on both nodes. Checking rather than trusting the note
+showed it had **already been done on both**, so the row was closed the moment it
+was opened. The note in #1 was simply stale.
+
+Why it mattered: Jenkins invokes the deploy helper through `sudo` at a **fixed
+path** and the sudoers rule pins that path, so editing
+`deployment/deploy_youless.sh` in git changes nothing until it is installed on
+each node:
+
+```sh
+sudo install -m 0700 -o root -g root \
+  deployment/deploy_youless.sh /usr/local/sbin/deploy-youless.sh
+```
+
+Evidence, both nodes, 2026-08-29 ~20:20 CEST:
+
+| | patricia | pi4 |
+|---|---|---|
+| `deploy-youless.sh` blob | `d14617b` | `d14617b` |
+| `youless-freshness.py` | installed 19:03 | installed 19:16 |
+| `youless-freshness.timer` | active | active |
+| last run exit status | 0 | 0 |
+
+The installed script hashes are **identical to the repo blob**
+(`git hash-object deployment/deploy_youless.sh` -> `d14617b`), so neither node is
+running an old copy. The freshness timers fire every 5 minutes and the mutual
+cross-check works in both directions -- patricia logged `OK pi4: newest row 12s
+old`, pi4 logged `OK patricia: newest row 2s old`. So the monitoring from #1 is
+genuinely live, not merely deployed, and `/etc/youless/freshness.env` must exist
+on both (the deploy skips enabling the timer without it).
+
+To re-verify later, per node:
+
+```sh
+git hash-object deployment/deploy_youless.sh          # repo side
+sudo git hash-object /usr/local/sbin/deploy-youless.sh # node side, must match
+systemctl list-timers youless-freshness.timer
+journalctl -u youless-freshness -n 3 -o cat
+```
+
+This does **not** cover a *future* edit to `deploy_youless.sh` -- the same manual
+install is needed again each time, and nothing enforces it. A hash comparison in
+the smoke-check stage would turn that into a loud failure instead of a silent
+no-op.
 
 ---
 
