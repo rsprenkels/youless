@@ -61,6 +61,28 @@ pipeline {
           whoami
           sudo systemctl is-active --quiet youless.service
           sudo systemctl --no-pager --full status youless.service | sed -n '1,20p'
+
+          # The deploy helper runs from a fixed path that the sudoers rule pins,
+          # so editing deployment/deploy_youless.sh in git is a SILENT NO-OP
+          # until someone installs it on this node by hand. Compare the two and
+          # fail loudly, otherwise a stale helper just quietly keeps running.
+          # Both sides are checked out on a Linux agent, so comparing raw bytes
+          # is safe. A CRLF checkout would differ from the LF copy on the node
+          # and false-positive here.
+          echo 'checking the installed deploy helper matches the repo'
+          repo_hash=$(sha256sum "${WORKSPACE}/deployment/deploy_youless.sh" | cut -d" " -f1)
+          node_hash=$(sudo -n /usr/bin/sha256sum "${DEPLOY_SCRIPT}" | cut -d" " -f1)
+
+          if [ "${repo_hash}" != "${node_hash}" ]; then
+            echo "ERROR: ${DEPLOY_SCRIPT} does not match deployment/deploy_youless.sh"
+            echo "  repo: ${repo_hash}"
+            echo "  node: ${node_hash}"
+            echo "The deploy above therefore ran an OUTDATED helper. Reinstall it on this node:"
+            echo "  sudo install -m 0700 -o root -g root \\"
+            echo "    deployment/deploy_youless.sh ${DEPLOY_SCRIPT}"
+            exit 1
+          fi
+          echo "deploy helper is current (${repo_hash})"
         '''
       }
     }

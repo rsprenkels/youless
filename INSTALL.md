@@ -163,12 +163,25 @@ jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl is-active youless.service
 jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl status youless.service
 jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl --no-pager --full status youless.service
 jenkins ALL=(root) NOPASSWD: /usr/bin/systemctl is-active --quiet youless.service
+
+# Allow jenkins to hash the installed deploy helper, so the smoke-check stage
+# can prove it matches the repo. The helper is mode 0700 root:root and cannot
+# be read otherwise. Read-only, and pinned to this one file.
+jenkins ALL=(root) NOPASSWD: /usr/bin/sha256sum /usr/local/sbin/deploy-youless.sh
 ```
 
 ```sh
 sudo chmod 0440 /etc/sudoers.d/jenkins-youless
-sudo -u jenkins sudo -n /usr/local/sbin/deploy-youless.sh --help   # verify
+sudo -u jenkins sudo -n /usr/local/sbin/deploy-youless.sh --help          # verify
+sudo -u jenkins sudo -n /usr/bin/sha256sum /usr/local/sbin/deploy-youless.sh
 ```
+
+> **Without that last rule the smoke-check stage fails** with
+> `sudo: a password is required`. The rule is deliberately narrow: `sha256sum`
+> is read-only and the path is pinned, so it grants no ability to modify
+> anything. Note that pinning the path is what makes it safe -- a bare
+> `NOPASSWD: /usr/bin/sha256sum` would let the `jenkins` user read the first
+> bytes of *any* file on the system, including `/etc/shadow`.
 
 Give `jenkins` a deploy key for the repo:
 
