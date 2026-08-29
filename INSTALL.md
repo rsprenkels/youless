@@ -329,6 +329,14 @@ Do **not** do these by hand; `deploy-youless.sh` handles them on every run:
 
 ## Gotchas
 
+- **Validate the `Jenkinsfile` before pushing:** `deployment/check-jenkinsfile.sh`.
+  Reading it is not enough. Two bugs shipped on 2026-08-29 that are invisible in
+  the source: Groovy unescapes triple-quoted strings *before* bash sees them, so
+  a doubled backslash silently breaks shell quoting (build 67); and a comment
+  that quotes the string delimiter closes the block, so nothing compiles and no
+  stage runs at all (build 68). The script checks the `sh` bodies after Groovy
+  unescaping and parses the file with the same `groovy-all` jar the controller
+  runs. A syntax error here costs a full build to discover.
 - **`deploy_youless.sh` changes need a manual copy** to
   `/usr/local/sbin/deploy-youless.sh`. See step 4. Since 2026-08-29 the
   smoke-check stage sha256s both copies and **fails the build** when they
