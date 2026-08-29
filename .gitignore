@@ -9,3 +9,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+
+# Local convenience: resumes a specific Claude Code session by id.
+# Machine-local and meaningless in another checkout.
+resume-claude.sh
