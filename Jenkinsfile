@@ -66,10 +66,13 @@ pipeline {
           # so editing deployment/deploy_youless.sh in git is a SILENT NO-OP
           # until someone installs it on this node by hand. Compare the two and
           # fail loudly, otherwise a stale helper just quietly keeps running.
-          # Keep backslashes out of this block. Groovy processes escapes inside
-          # ''' ... ''', so a \\ written here reaches bash as a single \ and
-          # silently breaks quoting -- which is exactly how this check shipped
-          # broken in build 67, failing on a paren three lines further down.
+          # Keep backslashes out of this block. Groovy processes escape
+          # sequences inside triple-quoted strings, so a doubled backslash
+          # written here reaches bash as a single one and silently breaks
+          # quoting -- which is how this check shipped broken in build 67,
+          # failing on a paren three lines further down. Do not quote the
+          # string delimiter in these comments either: it closes the block and
+          # the Jenkinsfile stops compiling, which is what broke build 68.
           #
           # Both sides are checked out on a Linux agent, so comparing raw bytes
           # is safe. A CRLF checkout would differ from the LF copy on the node
