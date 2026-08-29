@@ -66,6 +66,11 @@ pipeline {
           # so editing deployment/deploy_youless.sh in git is a SILENT NO-OP
           # until someone installs it on this node by hand. Compare the two and
           # fail loudly, otherwise a stale helper just quietly keeps running.
+          # Keep backslashes out of this block. Groovy processes escapes inside
+          # ''' ... ''', so a \\ written here reaches bash as a single \ and
+          # silently breaks quoting -- which is exactly how this check shipped
+          # broken in build 67, failing on a paren three lines further down.
+          #
           # Both sides are checked out on a Linux agent, so comparing raw bytes
           # is safe. A CRLF checkout would differ from the LF copy on the node
           # and false-positive here.
@@ -77,12 +82,11 @@ pipeline {
             echo "ERROR: ${DEPLOY_SCRIPT} does not match deployment/deploy_youless.sh"
             echo "  repo: ${repo_hash}"
             echo "  node: ${node_hash}"
-            echo "The deploy above therefore ran an OUTDATED helper. Reinstall it on this node:"
-            echo "  sudo install -m 0700 -o root -g root \\"
-            echo "    deployment/deploy_youless.sh ${DEPLOY_SCRIPT}"
+            echo "The deploy above therefore ran an OUTDATED helper. Reinstall it with:"
+            echo "  sudo install -m 0700 -o root -g root deployment/deploy_youless.sh ${DEPLOY_SCRIPT}"
             exit 1
           fi
-          echo "deploy helper is current (${repo_hash})"
+          echo "deploy helper is current: ${repo_hash}"
         '''
       }
     }
