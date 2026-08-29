@@ -119,6 +119,57 @@ monitoring.
 Peer hostnames must resolve from this node. `patricia` and `pi4` resolve for
 each other via `.home` on the LAN.
 
+## 3b. Secrets: `/etc/youless/notify.env`
+
+Where failure notifications go. Read by `youless-notify@.service`, which
+`OnFailure=` starts when the freshness check fails.
+
+```sh
+sudo tee /etc/youless/notify.env >/dev/null <<'EOF'
+NTFY_URL=https://ntfy.sh
+NTFY_TOPIC=<<the shared topic>>
+EOF
+sudo chmod 0600 /etc/youless/notify.env
+```
+
+**Use the same topic on every node**, so one subscription on the phone covers
+the whole fleet.
+
+The topic name is the **only** secret on the public ntfy.sh instance: anyone who
+knows it can read the alerts and publish fakes. So it is a long random string,
+it is `0600 root:root`, and it stays out of git. Alert text is deliberately
+generic (`youless: <unit> failed on <host>` plus journal lines), so a leaked
+topic exposes nothing beyond the fact that a home energy meter exists.
+
+Unlike the freshness timer there is nothing to enable -- `OnFailure=` starts the
+template unit on demand. The deploy therefore installs the notifier
+unconditionally and only *warns* when this file is missing. Note what that
+means: **a node with no `notify.env` still runs its freshness check and still
+enters failed state, it just cannot tell anyone.**
+
+To subscribe: install the **ntfy** app, Subscribe to topic, enter the topic name,
+leave the server as `ntfy.sh`.
+
+Verify the whole path end to end with a unit that fails on purpose:
+
+```sh
+sudo tee /etc/systemd/system/notify-selftest.service >/dev/null <<'EOF'
+[Unit]
+OnFailure=youless-notify@%N.service
+[Service]
+Type=oneshot
+ExecStart=/bin/false
+EOF
+sudo systemctl daemon-reload
+sudo systemctl start notify-selftest.service          # expected to fail
+journalctl -u youless-notify@notify-selftest -n 5 -o cat
+sudo rm /etc/systemd/system/notify-selftest.service && sudo systemctl daemon-reload
+```
+
+Testing by hand with `systemctl start youless-notify@foo` would only prove the
+script and network work. This proves the `OnFailure=` wiring, which is the part
+that actually has to fire at 03:00.
+
 ## 4. The privileged deploy helper
 
 Jenkins invokes this through `sudo` at a **fixed path**, so it must be copied
@@ -273,12 +324,21 @@ Do **not** do these by hand; `deploy-youless.sh` handles them on every run:
 | `/etc/systemd/system/youless.service` | the unit, including `WatchdogSec=60` |
 | `/usr/local/sbin/youless-freshness.py` | the freshness check |
 | `youless-freshness.{service,timer}` | its units, timer enabled when `freshness.env` exists |
+| `youless-notify.sh` + `youless-notify@.service` | the push path; nothing to enable, `OnFailure=` starts it |
 | `systemctl daemon-reload` + restart | |
 
 ## Gotchas
 
 - **`deploy_youless.sh` changes need a manual copy** to
-  `/usr/local/sbin/deploy-youless.sh`. See step 4.
+  `/usr/local/sbin/deploy-youless.sh`. See step 4. Since 2026-08-29 the
+  smoke-check stage sha256s both copies and **fails the build** when they
+  differ, so this can no longer pass unnoticed. That check needs the
+  `sha256sum` sudoers rule in step 5.
+- **Notifications only fire from a node that is still alive.** `OnFailure=`
+  cannot report a node that lost power or died outright. The two nodes
+  cross-check, so one dying is covered by the other -- but **both** going down
+  (power cut, ISP outage) is silent. Closing that needs a dead man's switch
+  outside the house.
 - **The meter IP is hardcoded** in `src/youless_reader.py`.
 - **The unit and the reader must deploy together.** `WatchdogSec=60` kills a
   reader that does not send `WATCHDOG=1`; older code does not. The deploy

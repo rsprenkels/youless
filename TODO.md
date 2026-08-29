@@ -10,10 +10,12 @@ so references from commits and notes do not rot.
 | # | Status | Item | Group |
 |---|:------:|------|-------|
 | 1 | **[x]** | ~~[Add the freshness check to the deploy pipeline](#1-add-the-freshness-check-to-the-deploy-pipeline)~~ | code |
-| 2 | [ ] | [Make the freshness check actually reach someone](#2-make-the-freshness-check-actually-reach-someone) | code |
+| 2 | **[x]** | ~~[Make the freshness check actually reach someone](#2-make-the-freshness-check-actually-reach-someone)~~ | code |
 | 3 | [ ] | [Reuse the database connection in the DAO](#3-reuse-the-database-connection-in-the-dao) | code |
+| 16 | [ ] | [Nothing monitors replica divergence](#16-nothing-monitors-replica-divergence) | code |
 | 4 | [ ] | [Repo SQL is stale vs the deployed dashboard](#4-repo-sql-is-stale-vs-the-deployed-dashboard) | repo |
 | 5 | [ ] | [Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries) | repo |
+| 15 | [ ] | [Dead man's switch: nothing catches a whole-house outage](#15-dead-mans-switch-nothing-catches-a-whole-house-outage) | ops |
 | 14 | **[x]** | ~~[Install the current deploy script on patricia and pi4](#14-install-the-current-deploy-script-on-patricia-and-pi4)~~ | ops |
 | 6 | [ ] | [Deploy 72da7c2](#6-deploy-72da7c2) | ops |
 | 7 | [ ] | [Confirm graceful shutdown on the next deploy](#7-confirm-graceful-shutdown-on-the-next-deploy) | ops |
@@ -24,7 +26,7 @@ so references from commits and notes do not rot.
 | 12 | **[x]** | ~~[Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader)~~ | housekeeping |
 | 13 | [ ] | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
 
-**10 open, 4 done.**
+**11 open, 5 done.**
 
 Known and accepted, no action planned: [historical duplicates](#historical-duplicate-timestamps),
 [meter sample skips](#meter-sample-skips). Also done, before this list existed:
@@ -64,25 +66,49 @@ miss, and this one silently sat done-but-unrecorded.
 
 ## 2. Make the freshness check actually reach someone
 
-`youless-freshness.service` writes `CRITICAL ...` to the local journal and exits
-non-zero, so failures show in `systemctl --failed` and
-`journalctl -u youless-freshness`. Both are **pull** signals: they only help if
-somebody looks. The pi4 outage went unnoticed for 98 days precisely because
-nothing pushed.
+**Done 2026-08-29.** Failures now push to a phone via **ntfy**.
 
-Add an `OnFailure=` unit that sends somewhere that reaches a phone -- ntfy,
-Pushover, email, a Telegram bot.
+`youless-freshness.service` used to only write `CRITICAL ...` to the journal and
+exit non-zero -- visible in `systemctl --failed` and `journalctl`, both **pull**
+signals that help only if somebody looks. Nobody looked for 98 days.
 
-The two nodes cross-check each other, so whichever is alive can raise the alarm
-about the other. A single central alerting path is fine; it need not be
-per-node.
+What was built:
 
-### Related, not yet covered
+- `deployment/youless-notify.sh` -- posts the failed unit, host, timestamp and
+  the last 8 journal lines to an ntfy topic. Retries 3x over ~15s, because the
+  likeliest reason an alert fails to send is that the network is what broke.
+  Exits non-zero if it still cannot deliver, so a notification that never
+  reached a phone is itself visible in `systemctl --failed`.
+- `systemd/youless-notify@.service` -- template unit, started on demand.
+- `OnFailure=youless-notify@%N.service` on the freshness unit.
 
-Nothing monitors **replica divergence**. Both nodes can be individually fresh
-while drifting apart -- as pi4 did for 15 months before the 2026-08-24 backfill.
-A periodic per-month row-count comparison (what `data_sync.py --dry-run` already
-prints) would catch it.
+Use **`%N`, not `%n`**: `%n` keeps the `.service` suffix and yields a unit named
+`youless-notify@youless-freshness.service.service`. Caught by testing rather
+than by reading, which is also why the self-test in
+[INSTALL.md](INSTALL.md) drives a real `OnFailure=` instead of starting the
+notifier by hand -- the latter proves the script works but not the wiring.
+
+Verified end to end on **both** nodes with a deliberately failing unit:
+`notified ntfy about youless-notify-selftest (attempt 1)` on each.
+
+The topic lives in `/etc/youless/notify.env`, `0600 root:root`, same topic on
+both nodes, deliberately **not** in git: on the public ntfy.sh instance the
+topic name is the only thing keeping strangers out.
+
+### Why ntfy.sh and not self-hosted
+
+Self-hosting on patricia was the original plan, and it is wrong here.
+`sprenkelshosting.nl` is a **residential IP -- the same connection patricia sits
+behind**, not a separate VPS. An alerter on patricia therefore cannot report
+patricia dying, and pi4's alerts would be addressed to a service that died with
+it. It would also need port-forwarding and TLS before the phone could receive
+anything away from home.
+
+### What this does NOT cover
+
+Two gaps, promoted to their own rows so they are not buried in a `[x]` item:
+**[#15](#15-dead-mans-switch-nothing-catches-a-whole-house-outage)** (both nodes
+down) and **[#16](#16-nothing-monitors-replica-divergence)**.
 
 ## 3. Reuse the database connection in the DAO
 
@@ -291,6 +317,49 @@ This does **not** cover a *future* edit to `deploy_youless.sh` -- the same manua
 install is needed again each time, and nothing enforces it. A hash comparison in
 the smoke-check stage would turn that into a loud failure instead of a silent
 no-op.
+
+## 15. Dead man's switch: nothing catches a whole-house outage
+
+Split out of [#2](#2-make-the-freshness-check-actually-reach-someone) on
+2026-08-29, which closed the push half.
+
+`OnFailure=` can only fire **from a node that is still alive**. That covers the
+daemon crashing, the database refusing connections, capture stalling. It does
+not cover a node that lost power or died outright.
+
+One node dying is fine -- the nodes cross-check, so the survivor reports it.
+The uncovered case is **both** going at once: power cut, ISP outage, router
+failure. Nothing publishes, the phone stays quiet, and quiet reads exactly like
+healthy. That is the same shape as the 98-day pi4 outage.
+
+Fixing it needs something **outside the house** that expects a regular ping and
+alerts when the pings *stop*. Note the inversion: every other check here alerts
+on a bad signal, this one has to alert on the absence of a good one.
+
+There is no VPS to put it on -- `sprenkelshosting.nl` resolves to the home
+connection -- so this means a third party. Healthchecks.io free tier is the
+obvious candidate: each node pings a URL every 5 minutes, it alerts when a ping
+does not arrive. Deferred on 2026-08-29 only because it needs an account first.
+
+Do not put it on patricia. An alerter inside the failure domain cannot report
+that domain failing.
+
+## 16. Nothing monitors replica divergence
+
+Moved out of [#2](#2-make-the-freshness-check-actually-reach-someone) on
+2026-08-29, where it sat as a sub-note and would have been buried once that item
+was ticked.
+
+Both nodes can be **individually fresh while drifting apart**. The freshness
+check asks "is each node still writing rows?", which pi4 answered yes to for 15
+months while its history diverged, until the 2026-08-24 backfill.
+
+A periodic per-month row-count comparison would catch it -- `data_sync.py
+--dry-run` already prints exactly that, so the detection logic exists and only
+needs scheduling plus a threshold.
+
+Now cheap to wire up: it can reuse the `OnFailure=` push path from #2 rather
+than inventing its own alerting.
 
 ---
 

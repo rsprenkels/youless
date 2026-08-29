@@ -1,0 +1,30 @@
+# /etc/systemd/system/youless-notify@.service
+#
+# Template unit. A monitored unit carrying OnFailure=youless-notify@%N.service
+# makes systemd start youless-notify@<that-unit>.service, so %i below is the
+# name of whatever failed, without its .service suffix.
+#
+# Never enabled and never started by hand -- systemd starts it on demand.
+#
+# journalctl -u accepts a unit name with no suffix, so %i works as-is below.
+
+[Unit]
+Description=Push a notification that %i failed
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# NTFY_URL / NTFY_TOPIC. Install this file yourself on each node: the topic name
+# is the only secret protecting a public ntfy.sh topic, so it stays out of git.
+EnvironmentFile=/etc/youless/notify.env
+
+ExecStart=/usr/local/sbin/youless-notify.sh %i
+
+# Hardening: this needs outbound HTTPS and read access to the journal, nothing
+# more. ProtectSystem=strict still permits reading /var/log/journal.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

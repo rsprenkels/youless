@@ -15,6 +15,8 @@ Performs an atomic-ish deploy:
 - installs the capture-freshness check and its service+timer, and enables the
   timer if /etc/youless/freshness.env exists (that file is provisioned by hand,
   see INSTALL.md)
+- installs the failure notifier and its template unit, and warns if
+  /etc/youless/notify.env is missing (also hand-provisioned)
 - runs systemctl daemon-reload
 - restarts the service
 - optionally updates a python venv from requirements.txt
@@ -148,6 +150,25 @@ if [[ -f "${FRESHNESS_SRC}" ]]; then
   echo "Installed capture-freshness check and units"
 else
   echo "No ${FRESHNESS_SRC} in this workspace; skipping freshness check install"
+fi
+
+# --- failure notification ----------------------------------------------------
+# The push half of the monitoring. Installed unconditionally: unlike the timer
+# there is nothing to enable, because OnFailure= starts the template unit on
+# demand. A missing /etc/youless/notify.env only bites at failure time, so warn
+# about it now rather than discovering it during the outage it was meant to report.
+NOTIFY_SRC="${SRC_DIR}/deployment/youless-notify.sh"
+if [[ -f "${NOTIFY_SRC}" ]]; then
+  install -m 0755 -D "${NOTIFY_SRC}" /usr/local/sbin/youless-notify.sh
+  install -m 0644 "${SRC_DIR}/systemd/youless-notify@.service" /etc/systemd/system/
+  echo "Installed failure notifier and its template unit"
+
+  if [[ ! -f /etc/youless/notify.env ]]; then
+    echo "WARNING: /etc/youless/notify.env is missing -- failures will NOT reach a phone."
+    echo "         The freshness check still runs; only the push is dead. See INSTALL.md."
+  fi
+else
+  echo "No ${NOTIFY_SRC} in this workspace; skipping notifier install"
 fi
 
 # Reload and restart service

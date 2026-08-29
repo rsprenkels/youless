@@ -12,6 +12,14 @@ Description=Check that youless capture is still writing rows on every node
 After=network-online.target
 Wants=network-online.target
 
+# Push the failure to a phone. Entering failed state only shows up in
+# `systemctl --failed` and the journal, which are both PULL signals -- they help
+# only if somebody looks, and nobody looked for 98 days.
+# %N is this unit's own name WITHOUT the .service suffix, so the notifier knows
+# what died. Use %N and not %n: %n keeps the suffix, which lands you with a unit
+# called youless-notify@youless-freshness.service.service.
+OnFailure=youless-notify@%N.service
+
 [Service]
 Type=oneshot
 
