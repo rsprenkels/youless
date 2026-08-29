@@ -1,8 +1,31 @@
 # /etc/systemd/system/youless.service
 [Unit]
 Description=Youless Reader (runs youless_reader.py inside Python venv)
-After=network-online.target
-Wants=network-online.target
+
+# The database runs in Docker on the same host, so the reader must not start
+# before dockerd. Until 2026-08-29 this said only network-online.target, and
+# every boot lost the race: observed on pi4 after the kernel upgrade that day --
+#   19:45:46 youless started
+#   19:45:49 ERROR connecting to database: localhost:5432 Connection refused
+#   19:45:52 restart 1 -- server closed the connection unexpectedly
+#   19:45:54 docker started
+#   19:45:56 youless started, succeeded
+# Restart=always always recovered it, so it looked harmless. patricia raced too
+# and simply won a retry sooner.
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+# Ordering after dockerd narrows the race but cannot close it: dockerd being
+# active is not the container accepting connections on 5432. So the retry loop
+# must never be allowed to give up. systemd's default is StartLimitBurst=5
+# within StartLimitIntervalSec=10s, and a unit that trips that limit is not
+# retried again -- it just stays dead. On a cold boot or a slow SD card that is
+# a realistic outcome, and a silently dead reader is exactly the failure this
+# unit's watchdog was added for after the 98-day pi4 outage. 0 disables the
+# limit: keep retrying forever and let youless-freshness.timer raise the alarm,
+# which is the behaviour worth having. A genuinely broken reader then restarts
+# every RestartSec=3 and is loud in the journal rather than quiet and stopped.
+StartLimitIntervalSec=0
 
 [Service]
 # --- Adjust these paths and user/group ---
