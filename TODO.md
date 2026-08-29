@@ -91,6 +91,12 @@ notifier by hand -- the latter proves the script works but not the wiring.
 Verified end to end on **both** nodes with a deliberately failing unit:
 `notified ntfy about youless-notify-selftest (attempt 1)` on each.
 
+**Delivery to the handset confirmed 2026-08-29** -- the three self-test messages
+arrived in the Android app. That last hop is worth confirming separately: the
+node can only prove it handed the message to ntfy.sh, not that a phone ever
+showed it. An alert path verified only up to the server is exactly the kind that
+is trusted and silently broken.
+
 The topic lives in `/etc/youless/notify.env`, `0600 root:root`, same topic on
 both nodes, deliberately **not** in git: on the public ntfy.sh instance the
 topic name is the only thing keeping strangers out.
