@@ -17,8 +17,8 @@ so references from commits and notes do not rot.
 | 5 | [ ] | [Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries) | repo |
 | 15 | [ ] | [Dead man's switch: nothing catches a whole-house outage](#15-dead-mans-switch-nothing-catches-a-whole-house-outage) | ops |
 | 14 | **[x]** | ~~[Install the current deploy script on patricia and pi4](#14-install-the-current-deploy-script-on-patricia-and-pi4)~~ | ops |
-| 6 | [ ] | [Deploy 72da7c2](#6-deploy-72da7c2) | ops |
-| 7 | [ ] | [Confirm graceful shutdown on the next deploy](#7-confirm-graceful-shutdown-on-the-next-deploy) | ops |
+| 6 | **[x]** | ~~[Deploy 72da7c2](#6-deploy-72da7c2)~~ | ops |
+| 7 | **[x]** | ~~[Confirm graceful shutdown on the next deploy](#7-confirm-graceful-shutdown-on-the-next-deploy)~~ | ops |
 | 8 | [ ] | [Check the monthly aggregate on 1 September](#8-check-the-monthly-aggregate-on-1-september) | ops |
 | 9 | [ ] | [pi4 is 82% full](#9-pi4-is-82-full) | ops |
 | 10 | [ ] | [Jenkins GUI is slow over the tunnel](#10-jenkins-gui-is-slow-over-the-tunnel) | ops |
@@ -26,7 +26,7 @@ so references from commits and notes do not rot.
 | 12 | **[x]** | ~~[Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader)~~ | housekeeping |
 | 13 | [ ] | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
 
-**11 open, 5 done.**
+**9 open, 7 done.**
 
 Known and accepted, no action planned: [historical duplicates](#historical-duplicate-timestamps),
 [meter sample skips](#meter-sample-skips). Also done, before this list existed:
@@ -152,11 +152,22 @@ clearly mark superseded.
 
 ## 6. Deploy 72da7c2
 
-The startup-banner change (`log.error` -> `log.info`) is committed and pushed but
-**not deployed**: both nodes still run `5dee2c8` from disk. Until deployed, every
-restart still logs a red `ERROR` line that is not an error.
+**Done 2026-08-29.** Deployed to both nodes, builds 69 (patricia) and 70 (pi).
 
-Does not warrant a deploy of its own -- let it ride with the next one.
+The banner now logs at syslog priority 6 (INFO), not ERROR:
+
+```
+INFO  root starting youless_reader, write_to_dao:True loglevel:INFO
+```
+
+Worth noting this item was **already stale when it was picked up**. Checking the
+running code rather than trusting the note showed both nodes had matched repo
+HEAD since an earlier deploy that day -- `youless_reader.py` at `b55f2e5` and
+`youless.service` at `f093128` on both. The claim that they still ran `5dee2c8`
+was simply out of date. Third such case in one session, along with
+[#1](#1-add-the-freshness-check-to-the-deploy-pipeline) and
+[#14](#14-install-the-current-deploy-script-on-patricia-and-pi4): a note saying
+work is outstanding is evidence about the past, not about the nodes.
 
 ## 7. Confirm graceful shutdown on the next deploy
 
@@ -166,12 +177,21 @@ deployed; patricia was running a build with no signal handler at all and died on
 an uncaught `KeyboardInterrupt`, pi4 a build that checked the flag at the top of
 the loop and exited before polling.
 
-The next deploy should log `exit requested, exiting now`. Nothing to change --
-just watch for that line:
+**Done 2026-08-29.** Confirmed on **both** nodes, from real Jenkins deploys:
 
-```sh
-journalctl -u youless.service -f -o short-precise --since now
-```
+| node | build | evidence |
+|---|---|---|
+| patricia | 69 | `21:11:13,486 INFO root exit requested, exiting now` |
+| pi4 | 70 | `21:16:08,472 INFO root exit requested, exiting now` |
+
+Each was followed immediately by a clean start and, on pi4,
+`Connected to PostgreSQL, writing to hypertable 'data'`. No `KeyboardInterrupt`,
+no traceback, `NRestarts: 0` on both.
+
+pi4 was the one that mattered and it was confirmed last. Its earlier restarts
+that day were Postgres-race crashes rather than clean stops, so nothing before
+build 70 actually exercised the signal handler on that node -- patricia logging
+the line proved nothing about pi4.
 
 ## 8. Check the monthly aggregate on 1 September
 
