@@ -13,8 +13,8 @@ so references from commits and notes do not rot.
 | 2 | **[x]** | ~~[Make the freshness check actually reach someone](#2-make-the-freshness-check-actually-reach-someone)~~ | code |
 | 3 | [ ] | [Reuse the database connection in the DAO](#3-reuse-the-database-connection-in-the-dao) | code |
 | 16 | [ ] | [Nothing monitors replica divergence](#16-nothing-monitors-replica-divergence) | code |
-| 4 | [ ] | [Repo SQL is stale vs the deployed dashboard](#4-repo-sql-is-stale-vs-the-deployed-dashboard) | repo |
-| 5 | [ ] | [Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries) | repo |
+| 4 | **[x]** | ~~[Repo SQL is stale vs the deployed dashboard](#4-repo-sql-is-stale-vs-the-deployed-dashboard)~~ | repo |
+| 5 | **[x]** | ~~[Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries)~~ | repo |
 | 15 | [ ] | [Dead man's switch: nothing catches a whole-house outage](#15-dead-mans-switch-nothing-catches-a-whole-house-outage) | ops |
 | 14 | **[x]** | ~~[Install the current deploy script on patricia and pi4](#14-install-the-current-deploy-script-on-patricia-and-pi4)~~ | ops |
 | 6 | **[x]** | ~~[Deploy 72da7c2](#6-deploy-72da7c2)~~ | ops |
@@ -26,7 +26,7 @@ so references from commits and notes do not rot.
 | 12 | **[x]** | ~~[Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader)~~ | housekeeping |
 | 13 | [ ] | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
 
-**9 open, 7 done.**
+**7 open, 9 done.**
 
 Known and accepted, no action planned: [historical duplicates](#historical-duplicate-timestamps),
 [meter sample skips](#meter-sample-skips). Also done, before this list existed:
@@ -135,26 +135,45 @@ doing carefully, with the watchdog now in place as a backstop.
 
 ## 4. Repo SQL is stale vs the deployed dashboard
 
-`grafana/prod/*.sql` still show the old `SET TIME ZONE 'Europe/Amsterdam'` style
-and pre-guard predicates. The live dashboard is at **v60**, where every panel is
-session-timezone independent via `now() AT TIME ZONE` and carries the chunk-prune
-guard.
+**Done 2026-09-16.** Pulled the actual live dashboard JSON (`GET
+/api/dashboards/uid/2a8a5abd-c9fc-47c8-a87f-9f278b0a8a9a`, run from `patricia`
+where the Grafana token lives) rather than trusting this note, and diffed every
+panel's `rawSql` against what was committed.
 
-Grafana keeps its own copy of every panel query in `grafana.db`, so these files
-are documentation, not a deployment path. Right now they document something that
-no longer exists. Export the live panel SQL back into the repo, or update by
-hand.
+Confirmed true, and broader than this entry said: v60 finished the
+`SET TIME ZONE` -> `now() AT TIME ZONE` migration on all four barchart panels
+(5, 7, 8, 9). It also touched **panel 10 (`running_total`)**, which this entry
+didn't mention -- it never used `SET TIME ZONE`, but went from bare `now()` /
+`day::timestamp` to the same `AT TIME ZONE 'Europe/Amsterdam'` wrapping between
+v59 and v60.
+
+`grafana/prod/agg_per_day.sql` and `grafana/prod/cur_year_per_month.sql` are now
+the live panel SQL exported verbatim (panels 2/7/8/9/10 and 5 respectively), with
+a header pointing at `deployment/grafana-energie-v60-backup.json` as the source
+of truth instead of hand-maintained copies. The full dashboard JSON is backed up
+there too -- the newest backup in the repo was v59, itself one version behind.
+
+Diffing surfaced a real bug, not just staleness: the repo's `running_total` copy
+read `date_trunc('year', now() - interval '1 year')` (last year's daily deltas)
+where the live panel has always read `interval '0 year'` (this year's, which is
+what "running total" is supposed to mean on a dashboard whose default range is
+`now/y` to `now`). Fixed by the re-export -- would have shipped wrong if anyone
+had ever copied this file back into Grafana.
 
 ## 5. Scratch SQL still holds the slow bucket_minmax queries
 
-`grafana/current_year.sql`, `grafana/last_n_days.sql`,
-`grafana/measure_query_time.sql` and the top halves of the `prod/` files still
-contain the `generate_series` + self-join `bucket_minmax` pattern.
+**Done 2026-09-16.** Deleted `grafana/current_year.sql`, `grafana/last_n_days.sql`,
+`grafana/last_and_current_year.sql` (same pattern, not previously named here),
+and `grafana/measure_query_time.sql` (an `EXPLAIN ANALYZE` of the same query --
+the measurement this entry cites). The dead `bucket_minmax` block at the top of
+`grafana/prod/agg_per_day.sql` and `grafana/prod/cur_year_per_month.sql` is gone
+too, as part of re-exporting those two from the live dashboard for
+[#4](#4-repo-sql-is-stale-vs-the-deployed-dashboard).
 
-Nothing live uses them -- verified against parsed dashboard rows. But compression
-made that shape substantially **slower** (6,530 ms -> 14,274 ms for the 20-month
-variant), so as reference material they are now actively misleading. Delete or
-clearly mark superseded.
+`grafana/last_and_current_year_optimized.sql` and
+`grafana/last_and_current_year_hybrid.sql` were left alone -- draft/superseded,
+but not the `bucket_minmax` pattern this item is about, and nobody asked for a
+wider cleanup.
 
 ## 6. Deploy 72da7c2
 
