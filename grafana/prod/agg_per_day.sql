@@ -1,117 +1,108 @@
-with bucket_minmax as (with buckets as (SELECT generate_series(
-                                                       date_trunc('year', now()),
-                                                       date_trunc('year', now()) + interval '11 month',
-                                                       interval '1 month') as month)
-                       select b.month,
-                              min(d.tm) as min_ts,
-                              max(d.tm) as max_ts
-                       from buckets b
-                                left join data d on d.tm >= b.month and d.tm < b.month + interval '1 month'
-                       group by 1)
-select
-    bmm.month::timestamp as time,
-    coalesce(dmax.p1 - dmin.p1, 0) as p1,
-    coalesce(dmax.p2 - dmin.p2, 0) as p2,
-    coalesce(dmin.n1 - dmax.n1, 0) as n1,
-    coalesce(dmin.n2 - dmax.n2, 0) as n2
-from
-    bucket_minmax bmm
-        left join data dmin on bmm.min_ts = dmin.tm
-        left join data dmax on bmm.max_ts = dmax.tm
-order by
-    month asc
+-- Exported verbatim from the live "Energie" dashboard, v60 (2026-09-16).
+-- Do not hand-edit: Grafana keeps its own copy in grafana.db, so a hand edit
+-- here just drifts again the next time someone changes a panel there.
+-- Re-export via the API instead -- see TODO.md #4. Full dashboard JSON:
+-- deployment/grafana-energie-v60-backup.json
 
--- Hybrid: pre-computed historical months + real-time current month
--- Fast for history, always current for this month
+-- Panel id=2 "power"
+SELECT $__timeGroup(tm,$__interval) AS "time", AVG(pwr) AS "value" FROM data WHERE $__timeFilter(tm) GROUP BY 1
 
-SET TIME ZONE 'Europe/Amsterdam';
-
+-- Panel id=7 "last 14 days" (13+1 day window)
 -- Historical days from continuous aggregate
-SELECT day::timestamp                                                    as time,
+SELECT (day AT TIME ZONE 'Europe/Amsterdam')                                                    as time,
        coalesce(last_p1 - first_p1, 0) + coalesce(last_p2 - first_p2, 0) as from_net,
        coalesce(first_n1 - last_n1, 0) + coalesce(first_n2 - last_n2, 0) as to_net
 FROM daily_energy_summary
-WHERE day >= date_trunc('day', now() - interval '21 day')
-  AND day < date_trunc('day', now())
+WHERE day >= date_trunc('day', (now() - interval '13 day') AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+  AND day < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
 
 UNION ALL
 
 -- Current day from live data
-SELECT date_trunc('day', now())::timestamp                                                   as time,
+SELECT date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam')                                                   as time,
        coalesce(last(p1, tm) - first(p1, tm), 0) + coalesce(last(p2, tm) - first(p2, tm), 0) as from_net,
        coalesce(first(n1, tm) - last(n1, tm), 0) + coalesce(first(n2, tm) - last(n2, tm), 0) as to_net
 FROM data
 WHERE tm > now() - interval '2 day'   -- prune guard: bare now() lets TimescaleDB exclude chunks at PLAN time
-  AND tm >= date_trunc('day', now())
-  AND tm < date_trunc('day', now()) + interval '1 day'
+  AND tm >= date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+  AND tm < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam' + interval '1 day'
 
 ORDER BY time ASC;
 
-
-SELECT $__timeGroup(tm,$__interval) AS "time", AVG(pwr) AS "value" FROM data WHERE $__timeFilter(tm) GROUP BY 1
-
-
-
-
-
-
--- Net power usage per day (used from net, minus delivered to net)
--- Fast for history, always current for current day
-
-SET TIME ZONE 'Europe/Amsterdam';
-
+-- Panel id=8 "last 7 days"
 -- Historical days from continuous aggregate
-SELECT day::timestamp                                                    as time,
+SELECT (day AT TIME ZONE 'Europe/Amsterdam')                                                    as time,
        coalesce(last_p1 - first_p1, 0) + coalesce(last_p2 - first_p2, 0) as from_net,
-       coalesce(first_n1 - last_n1, 0) + coalesce(first_n2 - last_n2, 0) as to_net,
-       coalesce(last_p1 - first_p1, 0) + coalesce(last_p2 - first_p2, 0) + coalesce(first_n1 - last_n1, 0) + coalesce(first_n2 - last_n2, 0) as net_change
+       coalesce(first_n1 - last_n1, 0) + coalesce(first_n2 - last_n2, 0) as to_net
 FROM daily_energy_summary
-WHERE day >= date_trunc('day', now() - interval '21 day')
-  AND day < date_trunc('day', now())
+WHERE day >= date_trunc('day', (now() - interval '6 day') AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+  AND day < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
 
 UNION ALL
 
 -- Current day from live data
-SELECT date_trunc('day', now())::timestamp                                                   as time,
+SELECT date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam')                                                   as time,
+       coalesce(last(p1, tm) - first(p1, tm), 0) + coalesce(last(p2, tm) - first(p2, tm), 0) as from_net,
+       coalesce(first(n1, tm) - last(n1, tm), 0) + coalesce(first(n2, tm) - last(n2, tm), 0) as to_net
+FROM data
+WHERE tm > now() - interval '2 day'   -- prune guard: bare now() lets TimescaleDB exclude chunks at PLAN time
+  AND tm >= date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+  AND tm < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam' + interval '1 day'
+
+ORDER BY time ASC;
+
+-- Panel id=9 "last 14 days" (21+1 day window, adds net_change -- note this
+-- is a second, differently-scoped panel also titled "last 14 days" on the
+-- live dashboard; that duplicate title is live-dashboard state, not a repo bug)
+-- Historical days from continuous aggregate
+SELECT (day AT TIME ZONE 'Europe/Amsterdam')                                                    as time,
+       coalesce(last_p1 - first_p1, 0) + coalesce(last_p2 - first_p2, 0) as from_net,
+       coalesce(first_n1 - last_n1, 0) + coalesce(first_n2 - last_n2, 0) as to_net,
+       coalesce(last_p1 - first_p1, 0) + coalesce(last_p2 - first_p2, 0) + coalesce(first_n1 - last_n1, 0) + coalesce(first_n2 - last_n2, 0) as net_change
+FROM daily_energy_summary
+WHERE day >= date_trunc('day', (now() - interval '21 day') AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+  AND day < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+
+UNION ALL
+
+-- Current day from live data
+SELECT date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam')                                                   as time,
        coalesce(last(p1, tm) - first(p1, tm), 0) + coalesce(last(p2, tm) - first(p2, tm), 0) as from_net,
        coalesce(first(n1, tm) - last(n1, tm), 0) + coalesce(first(n2, tm) - last(n2, tm), 0) as to_net,
        coalesce(last(p1, tm) - first(p1, tm), 0) + coalesce(last(p2, tm) - first(p2, tm), 0) + coalesce(first(n1, tm) - last(n1, tm), 0) + coalesce(first(n2, tm) - last(n2, tm), 0) as net_change
 FROM data
 WHERE tm > now() - interval '2 day'   -- prune guard: bare now() lets TimescaleDB exclude chunks at PLAN time
-  AND tm >= date_trunc('day', now())
-  AND tm < date_trunc('day', now()) + interval '1 day'
+  AND tm >= date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+  AND tm < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam' + interval '1 day'
 
 ORDER BY time ASC;
 
-
-
-
-
+-- Panel id=10 "running_total"
 WITH daily_net AS (
     -- daily deltas for current year
     SELECT
-        day::timestamp as time,
+        (day AT TIME ZONE 'Europe/Amsterdam') as time,
         coalesce(last_p1 - first_p1, 0)
             + coalesce(last_p2 - first_p2, 0)
             + coalesce(first_n1 - last_n1, 0)
             + coalesce(first_n2 - last_n2, 0) as net_change
     FROM daily_energy_summary
-    WHERE day >= date_trunc('year', now() - interval '1 year')
-      AND day < date_trunc('day', now())
+    WHERE day >= date_trunc('year', (now() - interval '0 year') AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+      AND day < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
 
     UNION ALL
 
     -- current day from live data
     SELECT
-        date_trunc('day', now())::timestamp as time,
+        date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') as time,
         coalesce(last(p1, tm) - first(p1, tm), 0)
             + coalesce(last(p2, tm) - first(p2, tm), 0)
             + coalesce(first(n1, tm) - last(n1, tm), 0)
             + coalesce(first(n2, tm) - last(n2, tm), 0) as net_change
     FROM data
     WHERE tm > now() - interval '2 day'   -- prune guard: bare now() lets TimescaleDB exclude chunks at PLAN time
-      AND tm >= date_trunc('day', now())
-      AND tm < date_trunc('day', now()) + interval '1 day'
+  AND tm >= date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam'
+      AND tm < date_trunc('day', now() AT TIME ZONE 'Europe/Amsterdam') AT TIME ZONE 'Europe/Amsterdam' + interval '1 day'
 )
 
 SELECT
@@ -123,5 +114,3 @@ SELECT
         ) as running_total
 FROM daily_net
 ORDER BY time ASC;
-
-
