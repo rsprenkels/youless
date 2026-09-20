@@ -13,20 +13,29 @@ so references from commits and notes do not rot.
 | 2 | **[x]** | ~~[Make the freshness check actually reach someone](#2-make-the-freshness-check-actually-reach-someone)~~ | code |
 | 3 | [ ] | [Reuse the database connection in the DAO](#3-reuse-the-database-connection-in-the-dao) | code |
 | 16 | [ ] | [Nothing monitors replica divergence](#16-nothing-monitors-replica-divergence) | code |
+| 18 | [ ] | [The sync tool cannot insert into compressed chunks](#18-the-sync-tool-cannot-insert-into-compressed-chunks) | code |
+| 24 | [ ] | [One ntfy alert every 5 minutes for a two-hour outage](#24-one-ntfy-alert-every-5-minutes-for-a-two-hour-outage) | code |
 | 4 | [ ] | [Repo SQL is stale vs the deployed dashboard](#4-repo-sql-is-stale-vs-the-deployed-dashboard) | repo |
 | 5 | [ ] | [Scratch SQL still holds the slow bucket_minmax queries](#5-scratch-sql-still-holds-the-slow-bucket_minmax-queries) | repo |
+| 17 | [ ] | [Deploy the OOM-priority change to both nodes](#17-deploy-the-oom-priority-change-to-both-nodes) | ops |
+| 19 | [ ] | [Stop Jellyfin transcoding from starving the node](#19-stop-jellyfin-transcoding-from-starving-the-node) | ops |
 | 15 | [ ] | [Dead man's switch: nothing catches a whole-house outage](#15-dead-mans-switch-nothing-catches-a-whole-house-outage) | ops |
+| 20 | [ ] | [Enable memory cgroups at the next planned reboot](#20-enable-memory-cgroups-at-the-next-planned-reboot) | ops |
+| 21 | [ ] | [Swap is 512 MB and was completely full](#21-swap-is-512-mb-and-was-completely-full) | ops |
+| 22 | [ ] | [The 22T USB disk reset during the incident](#22-the-22t-usb-disk-reset-during-the-incident) | ops |
 | 14 | **[x]** | ~~[Install the current deploy script on patricia and pi4](#14-install-the-current-deploy-script-on-patricia-and-pi4)~~ | ops |
 | 6 | **[x]** | ~~[Deploy 72da7c2](#6-deploy-72da7c2)~~ | ops |
 | 7 | **[x]** | ~~[Confirm graceful shutdown on the next deploy](#7-confirm-graceful-shutdown-on-the-next-deploy)~~ | ops |
 | 8 | [ ] | [Check the monthly aggregate on 1 September](#8-check-the-monthly-aggregate-on-1-september) | ops |
 | 9 | [ ] | [pi4 is 82% full](#9-pi4-is-82-full) | ops |
 | 10 | [ ] | [Jenkins GUI is slow over the tunnel](#10-jenkins-gui-is-slow-over-the-tunnel) | ops |
+| 23 | [ ] | [Database password in a world-readable compose file](#23-database-password-in-a-world-readable-compose-file) | housekeeping |
 | 11 | **[x]** | ~~[Untracked files](#11-untracked-files)~~ | housekeeping |
 | 12 | **[x]** | ~~[Second Jenkins job: youless_reader](#12-second-jenkins-job-youless_reader)~~ | housekeeping |
 | 13 | [ ] | [Grafana service-account token](#13-grafana-service-account-token) | housekeeping |
 
-**9 open, 7 done.**
+**17 open, 7 done.** Items 17-24 came out of the
+[2026-09-20 patricia out-of-memory incident](#incident-2026-09-20-patricia-out-of-memory).
 
 Known and accepted, no action planned: [historical duplicates](#historical-duplicate-timestamps),
 [meter sample skips](#meter-sample-skips). Also done, before this list existed:
@@ -386,6 +395,183 @@ needs scheduling plus a threshold.
 
 Now cheap to wire up: it can reuse the `OnFailure=` push path from #2 rather
 than inventing its own alerting.
+
+## Incident 2026-09-20: patricia out of memory
+
+Record of what happened, so items 17-24 have their evidence in one place. Times
+are CEST; database timestamps are UTC.
+
+- **01:24:50** A Jellyfin client (Android app, 192.168.2.17) starts playing a
+  drone video from `/mnt/22T`. Jellyfin starts a **software** libx264 transcode
+  (`-probesize 1G`, `-bufsize` ~240 MB, `-maxrate` ~120 Mbit/s). In the same
+  second the USB disk `sdc` is reset and logs one read error ([#22](#22-the-22t-usb-disk-reset-during-the-incident)).
+- The client kept re-requesting the stream about every 40 s. Several ffmpeg
+  processes exited with 137; **5 were still alive at 03:21, ~1.2 GB together.**
+- **01:28:12** last sample stored by patricia's reader.
+- **01:32** first ntfy alert, sent by **pi4**: its freshness check timed out
+  connecting to patricia:5432. Then one every 5 minutes ([#24](#24-one-ntfy-alert-every-5-minutes-for-a-two-hour-outage)).
+- **~01:35** first OOM kill. Swap was exhausted (`Free swap = 176kB`). The OOM
+  killer only ever chose desktop processes (`wireplumber`, `xdg-desktop-portal`,
+  `pipewire`), never ffmpeg or Jellyfin. Kernel log lines came ~20 s apart and
+  Jellyfin's own log froze: the box was thrashing.
+- **03:21:04** the stall clears. systemd's watchdog only fired then, because PID 1
+  was itself stalled. The reader restarted cleanly and was stable by 03:22:57.
+  What released the memory is **not established.**
+
+**Impact.** patricia lost ~690 samples (01:28:12 to 03:22:50); pi4 lost none.
+Energy totals are unaffected (cumulative counters); it showed as a hole in the
+`pwr` series on patricia-backed panels. Backfilled from pi4 the same morning:
+695 rows for September, and patricia and pi4 then matched exactly.
+
+**Why patricia could not report it.** Its own freshness check could not run
+while it was thrashing. The alerts came from pi4 -- the cross-check between the
+nodes did its job.
+
+**What was done (2026-09-20).** Jellyfin drop-in
+`/etc/systemd/system/jellyfin.service.d/oom.conf` (`OOMScoreAdjust=500`);
+timescaledb container recreated with `oom_score_adj: -500`; commit `5307ba5`
+adds `OOMScoreAdjust=-900` to `youless.service` (not deployed yet, #17).
+
+**Not proven.** The ~7.7 GB of anonymous memory seen at 01:42 could not be
+attributed per process -- the first OOM task table is interleaved across many
+minutes in the journal. ffmpeg is the largest consumer in the 03:21 snapshot and
+the timing matches, but the link to the transcode is circumstantial.
+
+## 17. Deploy the OOM-priority change to both nodes
+
+Commit `5307ba5` adds `OOMScoreAdjust=-900` to `systemd/youless.service` and
+`oom_score_adj: -500` to the compose snippet in INSTALL.md. Live on patricia
+already, by hand: the Jellyfin drop-in (`OOMScoreAdjust=500`) and the timescaledb
+container, recreated from `/opt/timescaledb/docker-compose.yml` (edited in place;
+that file is not in git).
+
+Still to do:
+
+1. Push, then run `youless_pipeline` -- `pi` first, verify, then `patricia`, as
+   always. Verify with `systemctl show youless.service -p OOMScoreAdjust` and
+   `cat /proc/$(systemctl show youless.service -p MainPID --value)/oom_score_adj`.
+2. **pi4's timescaledb is untouched:** same one-line compose edit, then
+   `docker compose up -d`. That recreates the container (a ~20 s database
+   restart; the reader retries forever). pi4 has ~6 GB free and no Jellyfin, so
+   this is the low-urgency half, but the nodes should stay identical.
+
+## 18. The sync tool cannot insert into compressed chunks
+
+On 2026-09-20 `src/tools/data_sync.py` failed on the 2026-05 month with
+`DatatypeMismatch: attribute 11 of type record has wrong type. Table has type
+numeric, but query expects integer.` Every chunk before 2026-09-04 is
+compressed, and the anti-join INSERT into a compressed chunk fails. The
+transaction rolled back; nothing was written. The cause of the type error was
+not investigated.
+
+Two consequences:
+
+- **The tool aborts at the first failing month** (months run oldest first), so
+  it never reached September, which was the one that mattered. Last night's
+  backfill worked only because I ran its `_sync_month` for 2026-09 alone. The
+  tool only works today when the gap is in the newest, uncompressed chunk.
+- **11 rows are still missing on patricia**, unrelated to the outage -- older
+  drift that pi4 has and patricia does not: 2026-05-03 15:23:58, :24:08, :24:17,
+  :24:27, :24:37, :24:47, :24:57, 15:25:06, :25:16 and 2026-05-04 19:06:04,
+  19:13:45. All sit in `_hyper_2_86_chunk` (2026-04-30 to 05-07).
+
+Fix options: `decompress_chunk` / sync / `compress_chunk` around the insert
+(in the tool, or by hand for this chunk); at minimum make the tool keep going
+past a failing month and report it. This matters for
+[#16](#16-nothing-monitors-replica-divergence): a divergence alert is only
+useful if the repair tool can act on it.
+
+## 19. Stop Jellyfin transcoding from starving the node
+
+Found in `/etc/jellyfin/encoding.xml`: `HardwareAccelerationType` is `none`,
+`EnableThrottling` is `false`, `H264Crf` 23. The Pi 5 has no hardware H.264
+encoder, so every transcode is CPU and RAM. The client asked for ~120 Mbit/s and
+re-requested every ~40 s while ffmpeg was stuck.
+
+Options, roughly in order of payoff (menu labels vary by Jellyfin version):
+
+- Per user (Dashboard, Users, Playback): turn off "Allow video playback that
+  requires transcoding" for the phone user, or set a streaming bitrate limit.
+- Dashboard, Playback, Transcoding: enable "Throttle transcodes".
+- Find out why a drone clip needs transcoding at all (`ffprobe` the file: codec
+  and bitrate); direct play would avoid the problem.
+- Check the nightly tasks -- "Extract Chapter Images" 02:00 and "Generate
+  Trickplay Images" 03:00 -- which read the same NTFS disks in the same hours.
+
+Already in place: `OOMScoreAdjust=500` on the unit, so the kernel kills
+Jellyfin and its ffmpeg children first. That limits the damage; it does not stop
+the transcode from starting.
+
+## 20. Enable memory cgroups at the next planned reboot
+
+Both nodes boot with `cgroup_disable=memory`; the controllers available are only
+`cpuset cpu io pids`. So `MemoryMax=`/`MemoryHigh=` in a unit, and `mem_limit`
+in compose, are **silently ignored.** On patricia `/boot/firmware/cmdline.txt`
+has no `cgroup_` option at all, so the disable comes from the firmware's default
+boot arguments (pi4's cmdline.txt was not checked).
+
+Fix: append `cgroup_enable=memory cgroup_memory=1` to the single line in
+`/boot/firmware/cmdline.txt`, reboot, and confirm `memory` appears in
+`/sys/fs/cgroup/cgroup.controllers`. Then add real caps to the Jellyfin drop-in
+(`MemoryHigh=`, `MemoryMax=`; sizes to be chosen) -- the proper fix that
+`OOMScoreAdjust` only approximates.
+
+**Do this in a planned window, one node at a time.** A reboot stops capture on
+that node; the other covers, and the gap can be backfilled afterwards
+([#18](#18-the-sync-tool-cannot-insert-into-compressed-chunks) permitting -- a
+short recent gap is in the uncompressed chunk, so it is fine).
+
+## 21. Swap is 512 MB and was completely full
+
+patricia's `/var/swap` is 512 MB and was 512/512 used at 07:46 on 2026-09-20,
+hours after the incident, with 4.7 GB "available" (stale pages). During the
+incident it hit `Free swap = 176kB`. pi4 has ~200 MB.
+
+More swap does not cure a runaway process, but it gives the kernel more room
+before it starts killing, and patricia's root is NVMe so it is cheap. Options:
+a larger `/var/swap` (no reboot: `swapoff` needs ~512 MB of free RAM, which is
+there), or zram -- but `/sys/module/zram` does not exist in the running kernel,
+so check `modprobe zram` first (`zramctl` is installed). The size is a decision.
+
+## 22. The 22T USB disk reset during the incident
+
+At 01:24:51: `usb 4-1: reset SuperSpeed USB device number 2 using xhci-hcd`, then
+`I/O error, dev sdc, sector 39337238848 op READ`. That is the only reset since
+boot (21 days). `sdc` is a WDC WD220EDGZ (20 TB) mounted at `/mnt/22T` through
+ntfs-3g, a FUSE process (`mount.ntfs`, ~246 MB RSS at 03:21).
+
+It coincided with the transcode's first read, and whether the reset started the
+stall or was caused by the load is not established. To do: `smartctl -a
+/dev/sdc` (a USB bridge may need `-d sat`; install `smartmontools` if absent),
+check the enclosure's power supply and cable, and watch `dmesg` for repeats.
+
+## 23. Database password in a world-readable compose file
+
+`/opt/timescaledb/docker-compose.yml` is mode 0644 on both nodes and holds
+`POSTGRES_PASSWORD` in plain text (with `$$` compose escaping). Everything else
+is 0600/0640 under `/etc/youless/`; this file is the odd one out. INSTALL.md's
+snippet uses a placeholder, which is right.
+
+On 2026-09-20 the password was printed into a Claude Code session transcript
+while inspecting this file. It is not in git.
+
+Fix: move it to an `env_file:` (`/opt/timescaledb/.env`, mode 0600; mind that `$`
+escaping differs there) and `chmod 0600` the compose file. Decide whether to
+rotate. If so, note that `POSTGRES_PASSWORD` only applies when the data directory
+is first initialised, so changing the variable alone changes nothing: it needs
+`ALTER ROLE tsdb PASSWORD ...` plus updating `youless.env` and `freshness.env` on
+both nodes, the Grafana datasource, and anything setting `PG_DSN_*`.
+
+## 24. One ntfy alert every 5 minutes for a two-hour outage
+
+pi4 sent an alert for every failed freshness run from 01:32 until patricia
+recovered around 03:21 -- roughly 22 (not counted exactly). Each one was correct,
+and loud is the safer failure mode, so this is low priority.
+
+If it becomes tiresome: notify on the state change, then remind every N runs
+instead of every run; or have ntfy replace the earlier notification rather than
+stack a new one (ntfy has a way to update a message by ID -- check the docs for
+the current mechanism before relying on it).
 
 ---
 
