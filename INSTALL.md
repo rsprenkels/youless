@@ -37,6 +37,9 @@ services:
     image: timescale/timescaledb:latest-pg16
     container_name: timescaledb
     restart: unless-stopped
+    # Under memory pressure the kernel should kill anything else first. See the
+    # OOMScoreAdjust comment in systemd/youless.service (2026-09-20 incident).
+    oom_score_adj: -500
     environment:
       POSTGRES_DB: timescale
       POSTGRES_USER: tsdb

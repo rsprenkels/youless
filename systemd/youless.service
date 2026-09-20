@@ -70,6 +70,15 @@ TimeoutStopSec=30
 NotifyAccess=main
 WatchdogSec=60
 
+# Memory-pressure priority.
+# On 2026-09-20 a runaway Jellyfin transcode on patricia exhausted RAM and swap
+# for two hours (01:28-03:21). The OOM killer only ever picked desktop
+# processes, the box thrashed, the reader stored nothing and postgres stopped
+# answering: ~690 samples lost on that node. A low oom_score_adj makes the
+# kernel pick almost anything else first. (Memory cgroup limits would be the
+# better tool, but Raspberry Pi OS boots with cgroup_disable=memory.)
+OOMScoreAdjust=-900
+
 # Journald logs
 StandardOutput=journal
 StandardError=journal
