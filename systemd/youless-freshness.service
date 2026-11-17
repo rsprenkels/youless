@@ -12,6 +12,15 @@ Description=Check that youless capture is still writing rows on every node
 After=network-online.target
 Wants=network-online.target
 
+# Don't judge row ages before the clock is right. On 2026-09-27 the first check
+# after a reboot ran on an unsynced clock (ages jumped from +317s to -3849s within
+# five minutes), raised a false CRITICAL, and the notifier failed too because the
+# network wasn't up yet. time-sync.target only waits for NTP when
+# systemd-time-wait-sync.service is enabled, so enable that as well:
+#   sudo systemctl enable systemd-time-wait-sync.service
+After=time-sync.target
+Wants=time-sync.target
+
 # Push the failure to a phone. Entering failed state only shows up in
 # `systemctl --failed` and the journal, which are both PULL signals -- they help
 # only if somebody looks, and nobody looked for 98 days.
