@@ -14,7 +14,8 @@ Performs an atomic-ish deploy:
 - installs/updates the systemd unit into /etc/systemd/system/
 - installs the capture-freshness check and its service+timer, and enables the
   timer if /etc/youless/freshness.env exists (that file is provisioned by hand,
-  see INSTALL.md)
+  see INSTALL.md), plus systemd-time-wait-sync.service so that check waits
+  for clock sync after a reboot
 - installs the failure notifier and its template unit, and warns if
   /etc/youless/notify.env is missing (also hand-provisioned)
 - runs systemctl daemon-reload
@@ -187,6 +188,19 @@ if [[ -f /etc/systemd/system/youless-freshness.timer ]]; then
     echo "WARNING: /etc/youless/freshness.env is missing -- freshness timer NOT enabled."
     echo "         This node has NO capture monitoring. See INSTALL.md, then run:"
     echo "           sudo systemctl enable --now youless-freshness.timer"
+  fi
+
+  # youless-freshness.service is ordered After=time-sync.target, but that target
+  # only waits for NTP when systemd-time-wait-sync.service is enabled -- without
+  # it the ordering is a no-op and the first check after a reboot can run on an
+  # unsynced clock (the 2026-09-27 false CRITICAL). Enable only, don't start:
+  # it matters at boot, and on a running system the clock is already synced.
+  if /bin/systemctl cat systemd-time-wait-sync.service >/dev/null 2>&1; then
+    /bin/systemctl enable systemd-time-wait-sync.service
+    echo "Enabled systemd-time-wait-sync.service"
+  else
+    echo "WARNING: systemd-time-wait-sync.service not available -- the freshness"
+    echo "         check will not wait for clock sync after a reboot."
   fi
 fi
 
