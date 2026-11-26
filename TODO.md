@@ -481,6 +481,16 @@ past a failing month and report it. This matters for
 [#16](#16-nothing-monitors-replica-divergence): a divergence alert is only
 useful if the repair tool can act on it.
 
+**Code fixed (2026-11-26), not yet run in production.** `data_sync.py` now
+decompresses each compressed chunk that is about to receive rows, inserts in
+the same transaction, then recompresses it (a failed recompression is only a
+warning; the policy catches up). A failing month is logged and skipped, the
+rest still run, and the exit status is 1. Tested against TimescaleDB 2.32.1
+with compressed chunks and dropped columns; the original `DatatypeMismatch` did
+not reproduce there, so its cause is still unknown, but the fix no longer
+writes into a compressed chunk at all. Still to do: run it pi4 -> patricia
+(`--dry-run` first) to fill the 11 May rows, then tick this off.
+
 ## 19. Stop Jellyfin transcoding from starving the node
 
 Found in `/etc/jellyfin/encoding.xml`: `HardwareAccelerationType` is `none`,
