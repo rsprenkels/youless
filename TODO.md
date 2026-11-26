@@ -445,15 +445,53 @@ already, by hand: the Jellyfin drop-in (`OOMScoreAdjust=500`) and the timescaled
 container, recreated from `/opt/timescaledb/docker-compose.yml` (edited in place;
 that file is not in git).
 
-Still to do:
+Nothing left to write: `5307ba5` is on `main`, so this is only running it.
+Runbook (prepared 2026-11-26), in order:
 
-1. Push, then run `youless_pipeline` -- `pi` first, verify, then `patricia`, as
-   always. Verify with `systemctl show youless.service -p OOMScoreAdjust` and
-   `cat /proc/$(systemctl show youless.service -p MainPID --value)/oom_score_adj`.
-2. **pi4's timescaledb is untouched:** same one-line compose edit, then
-   `docker compose up -d`. That recreates the container (a ~20 s database
-   restart; the reader retries forever). pi4 has ~6 GB free and no Jellyfin, so
-   this is the low-urgency half, but the nodes should stay identical.
+**0. Check it is not already live.** Any Jenkins build of `main` since 20 Sep
+would have shipped the unit change. On each node:
+
+```sh
+systemctl show youless.service -p OOMScoreAdjust                    # want -900
+cat /proc/$(systemctl show youless.service -p MainPID --value)/oom_score_adj
+docker inspect -f '{{.HostConfig.OomScoreAdj}}' timescaledb          # want -500
+```
+
+**1. Deploy helper must match the repo first.** `228e7a3` (2026-11-17) changed
+`deployment/deploy_youless.sh`; its message says it was installed by hand on both
+nodes, but the smoke check fails the build if not, so confirm before starting:
+
+```sh
+sha256sum deployment/deploy_youless.sh                    # repo, at main
+sudo sha256sum /usr/local/sbin/deploy-youless.sh          # node, must match
+```
+
+**2. Jenkins, `youless_pipeline`, `DEPLOY_TARGET=pi` first.** The deploy
+installs the unit, runs `daemon-reload` and restarts the reader, which is what
+applies `OOMScoreAdjust` (it is set when the process starts). Verify with the
+step 0 commands on pi4: `-900` in both places. Then the same for
+`DEPLOY_TARGET=patricia`.
+
+**3. pi4's timescaledb container.** Same one-line edit patricia already has.
+Do not `cat` the compose file: it prints the database password (#23).
+
+```sh
+cd /opt/timescaledb
+sudo cp -p docker-compose.yml docker-compose.yml.bak-$(date +%F)
+grep -n 'restart:\|oom_score_adj' docker-compose.yml
+# add, at the same indent as restart: (4 spaces), directly below it:
+#     oom_score_adj: -500
+sudo docker compose config --quiet && sudo docker compose up -d
+docker inspect -f '{{.HostConfig.OomScoreAdj}}' timescaledb          # want -500
+```
+
+`up -d` recreates the container: ~20 s without a database on pi4, and the reader
+retries forever, so nothing is lost beyond a few samples (backfillable). After
+~1 min, check pi4 is writing again: `journalctl -u youless -n 5 -o cat` and the
+next `youless-freshness` run from patricia.
+
+**4. Close this item** with the outputs of step 0 from both nodes and the build
+numbers.
 
 ## 18. The sync tool cannot insert into compressed chunks
 
