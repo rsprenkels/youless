@@ -140,7 +140,7 @@ ORDER BY time ASC;
 ## Step 7: Update Grafana Query
 
 1. Open your Grafana dashboard
-2. Edit the panel that uses `last_and_current_year.sql`
+2. Edit the panel "last and current year per month" (panel id=5; its live query is kept in `prod/cur_year_per_month.sql` -- the old `last_and_current_year.sql` has been removed)
 3. Replace the query with:
 
 ```sql
